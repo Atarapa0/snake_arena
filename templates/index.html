@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>🐍 Snake Arena v2.5</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>🐍 Snake Arena v2.5 (Lig Modu)</h1>
+  <div class="phase-badge" id="phaseBadge">idle</div>
+  <div class="tid">Lig #<span id="tid">0</span></div>
+  <div class="topology">🔄 Torus (30×30) | 🔴+1 🟡+3 ☠️-2</div>
+</header>
+
+<main>
+  <!-- SOL: Ayarlar + Upload + oyuncu listesi -->
+  <section class="panel">
+    <h2>⚙ Ayarlar</h2>
+    <div class="config-grid">
+      <label>Maks Adım
+        <input type="number" id="maxStepsInput" min="50" max="5000" value="2000" step="50">
+      </label>
+      <label>MB Sınırı
+        <input type="number" id="mbLimitInput" min="0.1" max="500" value="20" step="0.5">
+      </label>
+      <label>Lig Modu: Maç/Kişi
+        <input type="number" id="perPlayerInput" min="1" max="50" value="3" step="1">
+      </label>
+    </div>
+    <p class="hint tiny">Enerji (-1/adım) ve Meyve Etkileri otomatik uygulanır.</p>
+
+    <h2>📦 Toplu Yükleme (ZIP)</h2>
+    <p class="hint">Ajan ZIP ve Model ZIP atabilirsiniz.</p>
+    <form id="zipForm">
+      <label>Ajanlar ZIP
+        <input type="file" name="agents_zip" accept=".zip">
+      </label>
+      <label>Modeller ZIP
+        <input type="file" name="models_zip" accept=".zip">
+      </label>
+      <button type="submit" class="secondary tiny" style="margin-top:5px;width:100%">Zip Yükle</button>
+    </form>
+    <div id="zipMsg"></div>
+
+    <details>
+      <summary>Tekli Yükleme</summary>
+      <form id="uploadForm">
+        <label>Ajan (.py)<input type="file" name="agent_file" accept=".py" required></label>
+        <label>Model dosyası<input type="file" name="model_file" required></label>
+        <button type="submit" class="secondary tiny" style="width:100%">Tekli Yükle</button>
+      </form>
+    </details>
+
+    <h2>Kayıtlı Oyuncular <span id="playerCount" class="count">0</span></h2>
+    <ul id="playerList" class="player-list"></ul>
+
+    <div class="actions">
+      <button id="startBtn" class="primary">▶ Ligi Başlat (Rastgele Eşleşme)</button>
+      <button id="startManualBtn" class="primary" style="background-color: #6366f1;">📝 Manuel Fikstür</button>
+      <button id="resetBtn" class="secondary">Tam Sıfırlama</button>
+    </div>
+    <div class="speed-control">
+      <label>Maç hızı:
+        <input type="range" id="speedSlider" min="1" max="300" value="50">
+        <span id="speedVal">50</span> ms
+      </label>
+    </div>
+  </section>
+
+  <!-- ORTA: Canlı oyun -->
+  <section class="panel arena-panel">
+    <h2>Arena Canlı Yayını</h2>
+    <div id="matchInfo" class="match-info">Henüz maç yok</div>
+    <canvas id="arena" width="660" height="660"></canvas>
+    <div id="snakeStats" class="snake-stats"></div>
+    <h3>Olay Akışı</h3>
+    <div id="events" class="events"></div>
+  </section>
+
+  <!-- SAĞ: Braket + Leaderboard -->
+  <section class="panel" style="display:flex;flex-direction:column;gap:1rem;">
+    <div>
+      <h2>🏆 Lig Puan Tablosu
+        <button id="resetLbBtn" class="secondary tiny">Sıfırla</button>
+      </h2>
+      <p class="hint tiny" style="margin: 0 0 10px 0;">Sıralama: Önce Puan. Puan eşitliğinde kendi aralarındaki maçlara (Averaj) bakılır.</p>
+      <div style="overflow-x:auto;">
+        <table id="leaderboard" class="leaderboard" style="width:100%;text-align:left;">
+          <thead>
+            <tr><th>#</th><th>Oyuncu</th><th>O</th><th>G</th><th>B</th><th>M</th><th>Puan</th><th>Averaj</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    
+    <div>
+      <h2>📅 Fikstür & Sonuçlar</h2>
+      <div id="bracket" class="bracket" style="display:flex; flex-direction:column; gap:0.5rem; max-height:40vh; overflow-y:auto; padding-right:1rem; justify-content:flex-start;">
+         <!-- Dinamik liste gelecek -->
+      </div>
+    </div>
+  </section>
+</main>
+
+<dialog id="manualBracketModal" style="background:var(--bg-card);color:var(--text-light);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;width:90vw;max-width:600px;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;">
+  <h3 style="margin-top:0;margin-bottom:0.5rem">Manuel Fikstür Belirle</h3>
+  <p class="hint" style="margin-bottom:1rem">Birbiriyle oynamasını istediğiniz oyuncuları seçip "Maç Ekle" butonuna basın.</p>
+  
+  <div style="display:flex; gap:1rem; margin-bottom:1rem;">
+    <select id="p1Select" style="flex:1; padding:0.5rem; border-radius:5px; background:#1e293b; color:#fff; border:1px solid #475569;"></select>
+    <span style="align-self:center;">vs</span>
+    <select id="p2Select" style="flex:1; padding:0.5rem; border-radius:5px; background:#1e293b; color:#fff; border:1px solid #475569;"></select>
+    <button id="addMatchBtn" class="secondary">Maç Ekle</button>
+  </div>
+  
+  <h4>Oluşturulan Fikstür:</h4>
+  <ul id="manualMatchList" style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:0.5rem; overflow-y:auto; max-height:40vh; margin-bottom:1rem;">
+  </ul>
+  
+  <div class="actions" style="justify-content:flex-end;">
+    <button id="cancelManualStartBtn" class="secondary">İptal</button>
+    <button id="confirmManualStartBtn" class="primary">Bu Fikstürle Başlat</button>
+  </div>
+</dialog>
+
+<script src="/static/arena.js"></script>
+</body>
+</html>
