@@ -34,44 +34,107 @@
     
     <div id="settingsPanel" style="margin-top:20px; opacity:0.5; pointer-events:none;">
       <h2>2️⃣ Eğitim Ayarları (RL)</h2>
-      <label>Eğitim Algoritması:
-        <select>
-          <option value="ppo">PPO (Proximal Policy Optimization) - Önerilen</option>
-          <option value="dqn">DQN (Deep Q-Network)</option>
-          <option value="random">Rastgele Ağırlık Güncelleme (Json Test)</option>
+        <label>Eğitim Algoritması (Sadece Lokal Eğitim):
+        <select id="trainAlgo">
+          <option value="genetic">Yerel Genetik Evrim (Hızlı - Kural Tabanlı)</option>
+          <option value="dummy_rl" disabled>Derin Öğrenme (RL - Terminalden Başlatın)</option>
         </select>
       </label>
-      <label>Tur (Episode) Sayısı:
-        <input type="number" value="1000" min="100" max="10000">
+      <label>Tur (Episode / Jenerasyon) Sayısı:
+        <input type="number" id="trainEpisodes" value="50" min="1" step="1">
       </label>
-      <label>Öğrenme Oranı (Learning Rate):
-        <input type="number" value="0.001" step="0.0001">
-      </label>
-      <button id="startTrainBtn" class="primary" style="margin-top:10px; width:100%;">🚀 Self-Play Eğitimi Başlat</button>
+      <button id="startTrainBtn" type="button" class="primary" style="margin-top:10px; width:100%;">🚀 Lokal Eğitimi Başlat</button>
     </div>
   </section>
 
   <section class="train-console">
-    <h2>Eğitim Konsolu (Log)</h2>
+    <h2>Lokal Eğitim Konsolu <span id="trainStatus" style="color: #94a3b8; font-size:0.8em;">(Bekliyor)</span></h2>
     <div class="log-area" id="logArea">
       [System] Bekleniyor... Eğitmek için sol taraftan '.py' dosyanızı yükleyin.
     </div>
-    
+
     <div style="margin-top: 15px; text-align: center;">
-      <p style="color: #fbc02d; font-size: 0.9rem;">Eğitim tamamlandığında (Episode 1000/1000) parametreleriniz indirilebilir hale gelecektir.</p>
+      <p style="color: #fbc02d; font-size: 0.9rem;" id="dlHint">Eğitim tamamlandığında (En iyi ajan bulununca) parametreleriniz indirilebilir hale gelecektir.</p>
       <button id="downloadBtn" class="secondary" style="font-size: 1.1rem; padding: 10px 20px; opacity: 0.5; pointer-events: none;" disabled>
-        📥 Parametre Dosyasını (.pth) İndir
+        📥 En İyi Parametre Dosyasını (.json) İndir
       </button>
     </div>
   </section>
 </main>
 <script>
-  document.getElementById("trainUploadForm").addEventListener("submit", (e) => {
+  let trainedParams = null; // Backend'den gelecek
+
+  document.getElementById("trainUploadForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    document.getElementById("logArea").innerHTML += "<br>[System] Python dosyası yüklendi. Algoritma seçip eğitime başlayabilirsiniz.";
+    document.getElementById("logArea").innerHTML += "<br>[System] Python dosyaları başarıyla seçildi. Eğitime başlayabilirsiniz.";
     const setPanel = document.getElementById("settingsPanel");
     setPanel.style.opacity = 1;
     setPanel.style.pointerEvents = "auto";
+  });
+
+  document.getElementById("startTrainBtn").addEventListener("click", async () => {
+      const log = document.getElementById("logArea");
+      const btn = document.getElementById("startTrainBtn");
+      
+      const a1 = document.getElementById("agent1").files[0];
+      const a2 = document.getElementById("agent2").files[0];
+      
+      if (!a1) return alert("1. Ajanı seçmek zorunludur!");
+      
+      let formData = new FormData();
+      formData.append("agent1_file", a1);
+      if (a2) formData.append("agent2_file", a2);
+      
+      formData.append("episodes", document.getElementById("trainEpisodes").value);
+      
+      btn.disabled = true;
+      btn.style.opacity = 0.5;
+      document.getElementById("trainStatus").innerText = "(Eğitim Sürüyor... Lütfen Bekleyin)";
+      log.innerHTML += "<br><br>[Eğitim] Lokal oyun motorunda genetik eğitim başlatılıyor...<br>Bu işlem tur sayısına göre birkaç saniye sürebilir.<br>";
+      
+      try {
+          const res = await fetch("/api/train", {
+              method: "POST",
+              body: formData
+          });
+          const data = await res.json();
+          
+          if (!data.ok) {
+              log.innerHTML += `<br><span style="color:#ef4444">[Hata] ${data.error}</span>`;
+              document.getElementById("trainStatus").innerText = "(Hata)";
+          } else {
+              log.innerHTML += `<br><span style="color:#4ade80">[Başarılı] Eğitim tamamlandı!</span>`;
+              data.log.forEach(line => {
+                  log.innerHTML += `<br>> ${line}`;
+              });
+              
+              trainedParams = data.best_params;
+              
+              const dBtn = document.getElementById("downloadBtn");
+              dBtn.disabled = false;
+              dBtn.style.opacity = 1;
+              dBtn.style.pointerEvents = "auto";
+              document.getElementById("trainStatus").innerText = "(Tamamlandı)";
+          }
+      } catch (err) {
+          log.innerHTML += `<br><span style="color:#ef4444">[Ağ Hatası] ${err}</span>`;
+          document.getElementById("trainStatus").innerText = "(Ağ Hatası)";
+      } finally {
+          btn.disabled = false;
+          btn.style.opacity = 1;
+          log.scrollTop = log.scrollHeight;
+      }
+  });
+
+  document.getElementById("downloadBtn").addEventListener("click", () => {
+      if (!trainedParams) return;
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(trainedParams, null, 2));
+      const node = document.createElement('a');
+      node.setAttribute("href",     dataStr);
+      node.setAttribute("download", "trained_params.json");
+      document.body.appendChild(node);
+      node.click();
+      node.remove();
   });
 </script>
 </body>

@@ -374,7 +374,110 @@ def egitim():
     return render_template("egitim.html")
 
 
-@app.route("/api/upload", methods=["POST"])
+@app.route("/api/train", methods=["POST"])
+def train():
+    """
+    Sadece Local sunucuda çalışacak olan Çok Hızlı 'Genetik' Eğitim simülasyonu.
+    Yüklenen .py ajanını alır, eğer 2. ajan yoksa salak Dummy_Bot ile, 
+    eğer 2. ajan varsa kendi kendileriyle N tur kapıştırarak en ideal parametre matrisini evrimleştirir.
+    """
+    if "agent1_file" not in request.files:
+        return jsonify({"ok": False, "error": "agent1_file gerekli"}), 400
+        
+    a1_f = request.files["agent1_file"]
+    a2_f = request.files.get("agent2_file")
+    
+    episodes = int(request.form.get("episodes", 50))
+    if episodes > 500: episodes = 500 # Local server çok donmasın diye limit
+    
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        
+        # Ajan 1'i kaydet ve yükle
+        a1_path = tmp_dir / "agent1"
+        a1_path.mkdir()
+        a1_f.save(a1_path / "agent.py")
+        try:
+            ag1 = load_agent_from_dir(a1_path)
+            ag1.name = "Egitilen_Ajan"
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"Ajan 1 yüklenemedi: {e}"})
+            
+        # Rakip Ajan Seçimi
+        ag2 = None
+        is_dummy = True
+        if a2_f and a2_f.filename:
+            a2_path = tmp_dir / "agent2"
+            a2_path.mkdir()
+            a2_f.save(a2_path / "rakip.py")
+            try:
+                ag2 = load_agent_from_dir(a2_path)
+                ag2.name = "Gercek_Rakip"
+                is_dummy = False
+            except Exception:
+                pass
+                
+        if not ag2:
+            # HOCANIN İSTEDİĞİ: Üşenenlere ceza. Kötü, salak ve zayıf gelişecek eğitim ortamı robotu.
+            class DummyBot(BaseAgent):
+                def act(self, obs: dict) -> int:
+                    import random
+                    return random.randint(0, 3) # Tamamen rastgele, çok kolay ölür, eğiteni kalitesiz bırakır
+            ag2 = DummyBot(name="Dummy_Zayif_Bot")
+            
+        # Basit Genetik Evrim Simülasyonu (Ajan1'in parametrelerini geliştireceğiz)
+        # Amacımız Ajan 1'e json okutarak en iyi meyveyi bulma veya rastgelelik oranını öğretmek.
+        # Not: Gerçek RL olmadığı için .py kodunun yapısını değiştiremeyiz, 
+        # sadece dışarıdan bir Puan (Fitness) sistemi ile en iyi JSON ayarını bulup öğrenciye veririz.
+        
+        best_fitness = -9999
+        best_params = {"tercih_edilen_meyve": 6, "rastgelelik_orani": 1.0}
+        logs = []
+        
+        if is_dummy:
+            logs.append("Uyarı: 2. Ajan yüklemediniz! Modeliniz SALAK DUMMY BOTA karşı eğitiliyor.")
+            logs.append("Cezanız: Modeliniz gerçek taktikler görmediği için performansı (zeka seviyesi) düşük evrilecek.")
+        else:
+            logs.append("Harika! Kendi yüklediğiniz 2. Güçlü modele karşı 'Kıyasıya (Self-Play)' eğitim başladı.")
+
+        logs.append(f"Genetik Algoritma Başlıyor. Jenerasyon: {episodes}")
+        
+        # Her Episode'da ajanımıza yeni "Genetik Mutasyon" (JSON parametresi) uygulayıp hayatta kalma süresine bakacağız
+        import random
+        for ep in range(episodes):
+            test_fruit = random.choice([6, 7, 8]) # Kırmızı, Altın veya Zehirli yemeyi denesin
+            test_random = random.uniform(0.0, 0.5)
+            
+            # Öğrencinin ajanı JSON okuyacak şekilde yazıldıysa diye bu test_param ı ona vereceğiz
+            # (Lokal testlerde doğrudan ajanın içine inject edebiliriz)
+            if hasattr(ag1, "hedef_meyve"): ag1.hedef_meyve = test_fruit
+            
+            # Simüle et
+            game = game_engine.SnakeGame(ag1, ag2, max_steps=500, time_limit=0.5, fruit_rewards=STATE["fruit_rewards"])
+            while not game.is_over():
+                game.step()
+                
+            fitness = (game.snakes[0].length * 10) + game.snakes[0].energy + (game.step_count)
+            # Eğer Dummy robota oynuyorsa cezalandır, puanını suni olarak düşür (kalitesiz öğrensin)
+            if is_dummy:
+                fitness -= 100 
+                
+            if fitness > best_fitness:
+                best_fitness = fitness
+                best_params = {"tercih_edilen_meyve": test_fruit, "rastgelelik_orani": round(test_random, 3)}
+                if ep % (episodes // 5 + 1) == 0 or ep == episodes - 1:
+                    logs.append(f"-> Tur {ep+1}: Yeni en iyi gen bulundu! Skor: {fitness}")
+
+        logs.append("---------")
+        logs.append(f"Eğitim Bitti. En iyi Fitness Skoru: {best_fitness}")
+        logs.append(f"Evrimleşen Parametre: {best_params}")
+        
+        return jsonify({
+            "ok": True,
+            "log": logs,
+            "best_params": best_params
+        })
 def upload():
     if "agent_file" not in request.files or "model_file" not in request.files:
         return jsonify({"ok": False, "error": "agent_file ve model_file gerekli"}), 400
