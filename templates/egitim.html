@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>🐍 Snake Eğitim Modülü</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  .training-container { display: flex; gap: 20px; }
+  .train-settings { flex: 1; }
+  .train-console { flex: 2; background: #0f172a; padding: 1.5rem; border-radius: 8px; border: 1px solid #334155; }
+  .log-area { font-family: monospace; color: #4ade80; background: #000; height: 300px; padding: 10px; overflow-y: auto; border-radius: 5px; margin-top: 10px; border: 1px solid #1e293b; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🐍 Snake Arena Eğitim Yönetimi (Training)</h1>
+  <nav style="margin-top: 10px; margin-bottom: 20px; font-size: 1.1rem;">
+    <a href="/" style="color: #94a3b8; text-decoration: none; margin-right: 15px;">🏆 Arena (Lig Testi)</a>
+    <a href="/egitim" style="color: #60a5fa; text-decoration: none; font-weight: bold; border-bottom: 2px solid #60a5fa;">🏋️ Model Eğitimi (Training)</a>
+  </nav>
+  <p style="color: #cbd5e1; font-size: 0.9rem;">Öğrenciler dilerlerse 2 farklı modeli birbiriyle kapıştırarak, dilerlerse tek bir model yükleyip sistemin sağladığı Zayıf Bot'a karşı eğiterek modellerinin ağırlıklarını (.json/.pth) optimize edebilirler.</p>
+</header>
+
+<main class="training-container">
+  <section class="panel train-settings">
+    <h2>1️⃣ Eğitilecek Modeli Yükle</h2>
+    <form id="trainUploadForm">
+      <label>1. Ajan Kodu (.py) (Eğitilecek olan): <input type="file" id="agent1" name="agent1_file" accept=".py" required></label>
+      <label>2. Ajan Kodu (.py) (Rakip - Opsiyonel): <input type="file" id="agent2" name="agent2_file" accept=".py"></label>
+      <p class="hint tiny" style="margin-bottom:10px;">Not: 2. Ajanı (Rakibi) yüklemezseniz, modeliniz sistemin oluşturacağı 'Antrenman Botu'na karşı eğitilecektir.</p>
+      
+      <button type="submit" class="secondary tiny" style="width:100%">Kodları Buluta Yükle</button>
+    </form>
+    
+    <div id="settingsPanel" style="margin-top:20px; opacity:0.5; pointer-events:none;">
+      <h2>2️⃣ Eğitim Ayarları (RL)</h2>
+      <label>Eğitim Algoritması:
+        <select>
+          <option value="ppo">PPO (Proximal Policy Optimization) - Önerilen</option>
+          <option value="dqn">DQN (Deep Q-Network)</option>
+          <option value="random">Rastgele Ağırlık Güncelleme (Json Test)</option>
+        </select>
+      </label>
+      <label>Tur (Episode) Sayısı:
+        <input type="number" value="1000" min="100" max="10000">
+      </label>
+      <label>Öğrenme Oranı (Learning Rate):
+        <input type="number" value="0.001" step="0.0001">
+      </label>
+      <button id="startTrainBtn" class="primary" style="margin-top:10px; width:100%;">🚀 Self-Play Eğitimi Başlat</button>
+    </div>
+  </section>
+
+  <section class="train-console">
+    <h2>Eğitim Konsolu (Log)</h2>
+    <div class="log-area" id="logArea">
+      [System] Bekleniyor... Eğitmek için sol taraftan '.py' dosyanızı yükleyin.
+    </div>
+    
+    <div style="margin-top: 15px; text-align: center;">
+      <p style="color: #fbc02d; font-size: 0.9rem;">Eğitim tamamlandığında (Episode 1000/1000) parametreleriniz indirilebilir hale gelecektir.</p>
+      <button id="downloadBtn" class="secondary" style="font-size: 1.1rem; padding: 10px 20px; opacity: 0.5; pointer-events: none;" disabled>
+        📥 Parametre Dosyasını (.pth) İndir
+      </button>
+    </div>
+  </section>
+</main>
+<script>
+  document.getElementById("trainUploadForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    document.getElementById("logArea").innerHTML += "<br>[System] Python dosyası yüklendi. Algoritma seçip eğitime başlayabilirsiniz.";
+    const setPanel = document.getElementById("settingsPanel");
+    setPanel.style.opacity = 1;
+    setPanel.style.pointerEvents = "auto";
+  });
+</script>
+</body>
+</html>

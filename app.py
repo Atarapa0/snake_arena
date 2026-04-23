@@ -369,6 +369,10 @@ def tournament_runner():
 def index():
     return render_template("index.html")
 
+@app.route("/egitim")
+def egitim():
+    return render_template("egitim.html")
+
 
 @app.route("/api/upload", methods=["POST"])
 def upload():
