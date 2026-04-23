@@ -27,8 +27,33 @@
       <label>Lig Modu: Maç/Kişi
         <input type="number" id="perPlayerInput" min="1" max="50" value="3" step="1">
       </label>
+      <label>Karar Süresi (Sn)
+        <input type="number" id="timeLimitInput" min="0.01" max="5.0" value="0.1" step="0.01">
+      </label>
     </div>
-    <p class="hint tiny">Enerji (-1/adım) ve Meyve Etkileri otomatik uygulanır.</p>
+    
+    <div class="config-grid" style="margin-top: 10px; border-top: 1px solid #ccc; padding-top: 10px;">
+      <label style="color:#d32f2f; font-weight:bold;">Kırmızı Elma (6)
+        <div style="display:flex;gap:5px;">
+          <input type="number" id="f6_len" value="1" title="Boy Değişimi" style="width:40px;">
+          <input type="number" id="f6_egy" value="20" title="Enerji Değişimi" style="width:45px;">
+        </div>
+      </label>
+      <label style="color:#fbc02d; font-weight:bold;">Altın Elma (7)
+        <div style="display:flex;gap:5px;">
+          <input type="number" id="f7_len" value="3" title="Boy Değişimi" style="width:40px;">
+          <input type="number" id="f7_egy" value="50" title="Enerji Değişimi" style="width:45px;">
+        </div>
+      </label>
+      <label style="color:#7b1fa2; font-weight:bold;">Zehirli (8)
+        <div style="display:flex;gap:5px;">
+          <input type="number" id="f8_len" value="-2" title="Boy Değişimi" style="width:40px;">
+          <input type="number" id="f8_egy" value="100" title="Enerji Değişimi" style="width:45px;">
+        </div>
+      </label>
+    </div>
+    
+    <p class="hint tiny">Yukarıdaki Boy/Enerji değişimlerini ve saniye sınırını başlatmadan önce atayabilirsiniz.</p>
 
     <h2>📦 Toplu Yükleme (ZIP)</h2>
     <p class="hint">Ajan ZIP ve Model ZIP atabilirsiniz.</p>

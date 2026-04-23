@@ -1,1 +1,4 @@
-\!arena_v2/example_agents/
+# Python
+__pycache__/
+*.py[cod]
+.DS_Store

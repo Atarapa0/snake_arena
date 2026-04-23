@@ -209,10 +209,19 @@ async function poll() {
     if (!configSyncedOnce) {
       document.getElementById("maxStepsInput").value = s.max_steps;
       document.getElementById("mbLimitInput").value = s.mb_limit;
-      document.getElementById("foodPointsInput").value = s.food_points;
-      document.getElementById("winPointsInput").value = s.win_points;
+      if (document.getElementById("foodPointsInput")) document.getElementById("foodPointsInput").value = s.food_points;
+      if (document.getElementById("winPointsInput")) document.getElementById("winPointsInput").value = s.win_points;
       document.getElementById("speedSlider").value = s.speed_ms;
       document.getElementById("speedVal").textContent = s.speed_ms;
+      if (s.time_limit) document.getElementById("timeLimitInput").value = s.time_limit;
+      if (s.fruit_rewards) {
+        ["6", "7", "8"].forEach(id => {
+            if (s.fruit_rewards[id]) {
+                document.getElementById(`f${id}_len`).value = s.fruit_rewards[id].len;
+                document.getElementById(`f${id}_egy`).value = s.fruit_rewards[id].egy;
+            }
+        });
+      }
       configSyncedOnce = true;
     }
   } catch (e) {
@@ -468,24 +477,43 @@ async function postConfig(patch) {
 }
 
 const maxStepsInput = document.getElementById("maxStepsInput");
-let maxStepsDebounce = null;
-maxStepsInput.addEventListener("input", () => {
-  clearTimeout(maxStepsDebounce);
-  maxStepsDebounce = setTimeout(() => {
-    const v = parseInt(maxStepsInput.value);
-    if (!isNaN(v)) postConfig({max_steps: v});
+let configDebounce = null;
+
+function handleConfigInput() {
+  clearTimeout(configDebounce);
+  configDebounce = setTimeout(() => {
+    const patch = {};
+    const max_s = parseInt(document.getElementById("maxStepsInput").value);
+    if (!isNaN(max_s)) patch.max_steps = max_s;
+    
+    const mb_l = parseFloat(document.getElementById("mbLimitInput").value);
+    if (!isNaN(mb_l)) patch.mb_limit = mb_l;
+    
+    const t_lim = parseFloat(document.getElementById("timeLimitInput").value);
+    if (!isNaN(t_lim)) patch.time_limit = t_lim;
+    
+    for (let id of ["6", "7", "8"]) {
+        const len = parseInt(document.getElementById(`f${id}_len`).value);
+        const egy = parseInt(document.getElementById(`f${id}_egy`).value);
+        if (!isNaN(len) && !isNaN(egy)) {
+            patch[`f${id}_len`] = len;
+            patch[`f${id}_egy`] = egy;
+        }
+    }
+    
+    postConfig(patch);
   }, 400);
+}
+
+document.getElementById("maxStepsInput").addEventListener("input", handleConfigInput);
+document.getElementById("mbLimitInput").addEventListener("input", handleConfigInput);
+document.getElementById("timeLimitInput").addEventListener("input", handleConfigInput);
+["6", "7", "8"].forEach(id => {
+    document.getElementById(`f${id}_len`).addEventListener("input", handleConfigInput);
+    document.getElementById(`f${id}_egy`).addEventListener("input", handleConfigInput);
 });
 
-const mbLimitInput = document.getElementById("mbLimitInput");
-let mbDebounce = null;
-mbLimitInput.addEventListener("input", () => {
-  clearTimeout(mbDebounce);
-  mbDebounce = setTimeout(() => {
-    const v = parseFloat(mbLimitInput.value);
-    if (!isNaN(v)) postConfig({mb_limit: v});
-  }, 400);
-});
+// Eski event listenerları eziyoruz, handleConfigInput hepsini toplu gönderiyor
 
 const foodPointsInput = document.getElementById("foodPointsInput");
 let fpDebounce = null;

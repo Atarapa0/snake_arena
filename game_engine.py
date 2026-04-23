@@ -33,11 +33,22 @@ class Snake:
         return len(self.body)
 
 class SnakeGame:
-    def __init__(self, agent_a, agent_b, seed: Optional[int] = None, max_steps: int = DEFAULT_MAX_STEPS):
+    def __init__(self, agent_a, agent_b, seed: Optional[int] = None, max_steps: int = DEFAULT_MAX_STEPS, time_limit: float = 0.1, fruit_rewards: dict = None):
         self.agents = [agent_a, agent_b]
         self.rng = np.random.default_rng(seed)
         self.step_count = 0
         self.max_steps = int(max_steps)
+        self.time_limit = float(time_limit)
+        
+        # Default fruit rewards if not provided
+        if fruit_rewards is None:
+            fruit_rewards = {
+                6: {"len": 1, "egy": 20, "name": "Kırmızı Elma"},
+                7: {"len": 3, "egy": 50, "name": "Altın Elma"},
+                8: {"len": -2, "egy": 100, "name": "Zehirli Meyve"}
+            }
+        self.fruit_rewards = fruit_rewards
+        
         self.events_log = []
         self.last_actions = {}
         
@@ -176,9 +187,9 @@ class SnakeGame:
             if req not in (0, 1, 2, 3): applied = cur
             elif req == OPPOSITE[cur]: applied = cur
             
-            if elapsed > TIME_LIMIT:
+            if elapsed > self.time_limit:
                 applied = cur
-                self.events_log.append((self.step_count, f"{ag.name} zaman aşımı ({elapsed:.2f}s)"))
+                self.events_log.append((self.step_count, f"{ag.name} zaman aşımı ({elapsed:.2f}s - Kural: eski yöne devam)"))
                 
             s.direction = applied
             last_actions[i] = (req, applied)
@@ -253,18 +264,14 @@ class SnakeGame:
             
             ate_type = next((ft for fp, ft, si in eaten_fruits if si == i), None)
             
-            if ate_type == 6: # Red Apple
-                s.target_length += 1
-                s.energy = min(MAX_ENERGY, s.energy + 20)
-                self.events_log.append((self.step_count, f"{s.name} Kırmızı Elma yedi (+1 Boy, +20 En)"))
-            elif ate_type == 7: # Golden Apple
-                s.target_length += 3
-                s.energy = min(MAX_ENERGY, s.energy + 50)
-                self.events_log.append((self.step_count, f"{s.name} Altın Elma yedi (+3 Boy, +50 En)"))
-            elif ate_type == 8: # Poison Fruit
-                s.target_length = max(2, s.target_length - 2)
-                s.energy = min(MAX_ENERGY, s.energy + 100)
-                self.events_log.append((self.step_count, f"{s.name} Zehirli Meyve yedi (-2 Boy, +100 En)"))
+            if ate_type in (6, 7, 8):
+                rewards = self.fruit_rewards[ate_type]
+                s.target_length = max(2, s.target_length + rewards["len"])
+                s.energy = min(MAX_ENERGY, s.energy + rewards["egy"])
+                sign_len = "+" if rewards['len'] > 0 else ""
+                sign_egy = "+" if rewards['egy'] > 0 else ""
+                msg = f"{s.name} {rewards['name']} yedi ({sign_len}{rewards['len']} Boy, {sign_egy}{rewards['egy']} En)"
+                self.events_log.append((self.step_count, msg))
                 
             # Manage actual length vs target length
             while len(s.body) > s.target_length:

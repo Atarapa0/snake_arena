@@ -49,6 +49,12 @@ STATE = {
     "max_steps": 2000,     # max adim
     "mb_limit": 20,        # mb check
     "match_history": [],   # played matches
+    "time_limit": 0.1,     # saniye
+    "fruit_rewards": {
+        "6": {"len": 1, "egy": 20, "name": "Kırmızı Elma"},
+        "7": {"len": 3, "egy": 50, "name": "Altın Elma"},
+        "8": {"len": -2, "egy": 100, "name": "Zehirli Meyve"}
+    }
 }
 
 
@@ -202,13 +208,17 @@ def safe_name(raw: str) -> str:
 def validate_agent_dir(pdir: Path):
     """Ajanı yükleyip 1 hamle çalıştırarak doğrular. Exception fırlatır başarısızsa."""
     ag = load_agent_from_dir(pdir)
-    test_obs = np.zeros((30, 30), dtype=np.int8)
-    test_obs[15, 4] = 1    # kafa
-    test_obs[15, 3] = 2    # gövde
-    test_obs[15, 2] = 2
-    test_obs[15, 25] = 3   # rakip kafa
-    test_obs[15, 26] = 4
-    test_obs[10, 10] = 5   # yem
+    test_grid = np.zeros((30, 30), dtype=np.int8)
+    test_grid[15, 4] = 1    # kafa
+    test_grid[15, 3] = 2    # gövde
+    test_grid[15, 2] = 2
+    test_grid[15, 25] = 3   # rakip kafa
+    test_grid[15, 26] = 4
+    test_grid[10, 10] = 6   # Yeni id ile yem
+    test_obs = {
+        "grid": test_grid,
+        "stats": [100, 3, 3, 100]
+    }
     action = ag.act(test_obs)
     if action not in (0, 1, 2, 3):
         raise RuntimeError(f"act() {action!r} döndürdü, 0/1/2/3 olmalı")
@@ -220,6 +230,8 @@ def play_match_blocking(player_a: str, player_b: str):
     with STATE_LOCK:
         current_max_steps = STATE["max_steps"]
         mb_limit = STATE["mb_limit"]
+        time_limit = STATE["time_limit"]
+        fruit_rewards = STATE["fruit_rewards"]
 
     # 0) MB sınırı kontrolü: aşan hükmen mağlup
     a_over = player_is_oversized(player_a)
@@ -275,7 +287,9 @@ def play_match_blocking(player_a: str, player_b: str):
 
     # 2) Oyunu başlat
     game = game_engine.SnakeGame(a, b, seed=int(time.time()) % 100000,
-                                 max_steps=current_max_steps)
+                                 max_steps=current_max_steps,
+                                 time_limit=time_limit,
+                                 fruit_rewards=fruit_rewards)
     with STATE_LOCK:
         STATE["live_game"] = game.snapshot()
 
@@ -550,14 +564,27 @@ def config():
             if "food_points" in body:
                 v = int(body["food_points"])
                 STATE["food_points"] = max(0, min(100, v))
+            if "time_limit" in body:
+                v = float(body["time_limit"])
+                STATE["time_limit"] = max(0.01, min(5.0, v))
+            for fid in ["6", "7", "8"]:
+                if f"f{fid}_len" in body and f"f{fid}_egy" in body:
+                    # Int dönüşümü yapalım string gelse bile
+                    try:
+                        STATE["fruit_rewards"][fid]["len"] = int(body[f"f{fid}_len"])
+                        STATE["fruit_rewards"][fid]["egy"] = int(body[f"f{fid}_egy"])
+                    except ValueError:
+                        pass
     with STATE_LOCK:
         return jsonify({
             "ok": True,
             "speed_ms": STATE["speed_ms"],
             "max_steps": STATE["max_steps"],
             "mb_limit": STATE["mb_limit"],
-            "win_points": STATE["win_points"],
-            "food_points": STATE["food_points"],
+            "win_points": STATE.get("win_points", 50),
+            "food_points": STATE.get("food_points", 10),
+            "time_limit": STATE.get("time_limit", 0.1),
+            "fruit_rewards": STATE.get("fruit_rewards")
         })
 
 
@@ -668,8 +695,10 @@ def api_state():
             "speed_ms": STATE["speed_ms"],
             "max_steps": STATE["max_steps"],
             "mb_limit": STATE["mb_limit"],
-            "win_points": STATE["win_points"],
-            "food_points": STATE["food_points"],
+            "time_limit": STATE.get("time_limit", 0.1),
+            "fruit_rewards": STATE.get("fruit_rewards"),
+            "win_points": STATE.get("win_points", 50),
+            "food_points": STATE.get("food_points", 10),
             "match_history": STATE["match_history"][-30:],
         })
 
