@@ -1,85 +1,66 @@
-# 🐍 Snake Arena v2.5 (Lig ve Hayatta Kalma Modu)
+# 🐍 Snake Arena v2.5 - KOLAY KULLANIM REHBERİ
 
-Derin Öğrenme ve Pekiştirmeli Öğrenme (Reinforcement Learning) tabanlı yılan ajanları için geliştirilmiş, **kural tabanlı algoritmaların (If-Else) işe yaramadığı**, tamamen hayatta kalma ve strateji üzerine kurulu kapalı arena sistemidir.
+Bu proje, öğrencilerin kendi yılan botlarını (AI) yazıp yarıştırdığı bir platformdur. **Öğretmene sormadan her şeyi buradan halledebilirsiniz.**
 
-Bu projede öğrencilerin "Şurada duvar varsa sağa dön" gibi sabit kurallar yazması değil; **Pekiştirmeli Öğrenme (Self-Play / Ödül-Ceza)** mantığıyla ajanların kendi kendilerine oynayarak tecrübe kazanması ve optimum hayatta kalma stratejisini derin sinir ağlarıyla (Deep Neural Networks) keşfetmesi hedeflenmektedir.
+---
 
-## Ne Değişti? (Devasa v2.5 Güncellemesi)
-- **Açlık Sistemi (Enerji):** Her yılan *100 Enerji* ile başlar (Maks: 200). Her adımda enerji 1 azalır. Enerjisi biten yılan direk ölür! Kırmızı elma (+20), Altın elma (+50), Zehirli meyve (+100) enerji verir.
-- **Zehir Makinesi:** Haritada artık zehirli meyveler var (Tür 8). Zehir yerseniz boyunuz 2 birim kisalir ama enerjiniz anında fulle yakın artar. Bazen açlıktan ölmemek için bilerek zehir yemeniz gerekecek!
-- **Sabit Duvarlar (Engeller):** Haritanın 3 rastgele yerine (orta alan hariç) L, U ve I şeklinde beton bloklar konuldu. Çarpan parçalanır. Torus (Wrap-Around) kenarlar hala aktif, ama içerisi artık boş değil.
-- **Turnuva Ağacı Yok, Lig Var!** Eleme usülü iptal edildi. Rastgele lig fikstürü veya sizin seçeceğiniz manuel maçlarla herkes herkesle oynar.
-- **Puanlama (Lig Usulü):** 
-  - Rakibi ezerek, duvara çarptırarak veya yavaşlatıp aç bırakarak direkt **ÖLDÜRÜRSEN: 3 Puan**
-  - İkiniz de süre sonuna kadar hayatta kalırsanız, **BOYU UZUN OLAN: 2 Puan**
-  - İkiniz de süre sonuna kadar yaşar ve boylarınız eşitse, beraberlik: **1'er Puan**
+## 🚀 1. SİSTEMİ NASIL ÇALIŞTIRIRIM?
+1. Bilgisayarında terminali aç.
+2. `pip install flask numpy` komutunu çalıştır.
+3. `python app.py` komutuyla sistemi başlat.
+4. Tarayıcıdan `http://localhost:5001` adresine gir.
 
-## Öğrenciler İçin Mimari / Geliştirme Rehberi
+---
 
-Öğrenciler modellerini eğitirken **Pekiştirmeli Öğrenme (Reinforcement Learning)** tekniklerini kullanacaklardır. (Örn: DQN, PPO, A2C).
-İki yılan modelini (Agent A ve Agent B) sürekli birbiriyle savaştırarak (Self-Play) oyunu öğrenmelerini sağlamanız bekleniyor. Sistemin size sağladığı "Gözlem (Observation)" artık sadece bir matris değil; enerjinizi ve boyunuzu da içeren detaylı bir sözlüktür (Dictionary).
-
-### Gözlem Uzayı (Observation Space)
-Oyun motoru size her adımda şu sözlüğü verir:
-```python
-{
-    "grid": np.ndarray,  # 30x30'luk harita matrisi
-    "stats": [
-        benim_enerjim,   # (int) 0-200 arası
-        benim_boyum,     # (int) > 0
-        rakibin_boyu,    # (int) (rakip ölüyse 0)
-        rakibin_enerjisi # (int) (rakip ölüyse 0)
-    ]
-}
-```
-
-**Grid (Matris) Üzerindeki ID'ler:**
-- `0`: Boş
-- `1`: Kendi Kafam  | `2`: Kendi Gövdem
-- `3`: Rakip Kafa   | `4`: Rakip Gövde
-- `5`: Duvar (Çarparsan ölürsün)
-- `6`: Kırmızı Elma (Boy +1, Enerji +20)
-- `7`: Altın Elma   (Boy +3, Enerji +50)
-- `8`: Zehirli Meyve (Boy -2, Enerji +100 - Kurtarıcı zehir!)
-
-### Ajan Sınıfı (Örnek)
-Yeni formata göre örnek bir ajan sınıfı (Bu dosyalar Github'da `/example_agents` altında yer alır):
+## 🐍 2. KODU HANGİ FORMATTA YAZACAĞIM?
+Ajanın `/example_agents/ahmet.py` dosyasındaki gibi olmalıdır. **Tek geçerli format budur:**
 
 ```python
 from base_agent import BaseAgent
 import numpy as np
 
-class RL_Agent(BaseAgent):
-    def __init__(self, name="RL_Agent", data_dir=None):
-        super().__init__(name, data_dir)
-        # data_dir içinden neural network modelini (PyTorch vs.) yükle
-        # self.model = load_model(data_dir + "/model.pth")
-
+class MyAgent(BaseAgent):
     def act(self, obs: dict) -> int:
-        grid = obs["grid"]
-        stats = obs["stats"]
-        
-        my_energy = stats[0]
-        my_length = stats[1]
-        
-        # RL modelinizi kullanarak grid ve stats bilgilerini ağdan geçirin
-        # action = self.model.predict(grid, stats)
-        
-        # Aksiyonlar: 0=YUKARI, 1=SAĞ, 2=AŞAĞI, 3=SOL
-        return action
+        # SİSTEM SANA ŞUNLARI GÖNDERİR:
+        grid = obs["grid"]   # 30x30 Harita (Matris)
+        stats = obs["stats"] # [Kendi_Enerjin, Kendi_Boyun, Rakip_Boyu, Rakip_Enerjisi]
+
+        # SENİN YAPMAN GEREKEN: 0, 1, 2 veya 3 dönmek.
+        # 0: YUKARI, 1: SAĞ, 2: AŞAĞI, 3: SOL
+        return 1 
 ```
 
-### Ödül ve Ceza Fikirleri (RL Reward Shaping)
-Kendi simülasyonlarınızı (gym environment) yazarken eğitmek için kullanabileceğiniz ödüller:
-- Kırmızı/Altın elma yediğinde: `+Ödül`
-- Yaşadığı her bir step için: `+Ufak Ödül`
-- Duvara / Rakibe çarpıp öldüğünde: `-Büyük Ceza`
-- Rakibi öldürecek hamleye (rakibin alanını daraltma): `+Büyük Ödül`
-- Açlıktan öldüğünde: `-Ceza` (Zehir yiyip hayatta kaldığında ödüllendirin)
+---
 
-## Kurulum
-```bash
-pip install flask numpy
-python arena_v2/app.py
-```
-Tarayıcıdan: `http://localhost:5001`
+## 🏋️ 3. EĞİTİM (TRAINING) NASIL YAPILIR?
+Eğitim sayfası, yazdığın kodun hangi meyveye odaklanacağını senin yerine test ederek sana en iyi **zeka dosyasını (.json)** verir.
+1. **Modelini Yükle:** Kendi yazdığın `.py` dosyasını seç.
+2. **Rakibini Yükle:** Karşısında yarışacağı bir rakip `.py` dosyası seç (Eğitim için rakip şarttır!).
+3. **Eğitimi Başlat:** Sistem 50-100 maç yapar ve en iyi parametreleri bulur.
+4. **Zaman Kısıtlaması (Opsiyonel):** Eğer kutucuğu işaretlersen, yılanın 0.1 saniye gibi kısıtlı sürede karar vermeye zorlanır.
+5. **İndir:** Eğitim bitince sana bir `.json` dosyası verir. Bu senin "beynin"dir.
+
+---
+
+## 🏆 4. ARENA VE PUANLAMA MANTIĞI
+Arenada yılanları yarıştırırken puanlar şöyledir (Ayarları değiştirmezsen):
+
+- **3 PUAN (K.O.):** Rakibi direkt öldürürsen (Senin gövdene veya duvara çarpması).
+- **2 PUAN (PUANLA):** Süre (Adım) bittiğinde hayatta kalıp rakibinden daha uzunsan.
+- **1 PUAN (BERABERLİK):** İkiniz de yaşarsanız ve boylarınız aynıysa.
+
+### 🍎 MEYVE REHBERİ (Matris ID'leri)
+- **ID 6 (Kırmızı):** Boy +1, Enerji +20
+- **ID 7 (Altın):** Boy +3, Enerji +50
+- **ID 8 (Zehir):** **Boy -2**, Enerji +100 (Açlıktan ölmemek için hayat kurtarır!)
+- **ID 5 (Duvar):** Çarparsan direk ölürsün.
+
+---
+
+## 💡 ÖNEMLİ İPUÇLARI (TİYOLAR)
+1. **Zehir Stratejisi:** Enerjin 10-20 altına düştüğünde eğer elma uzaktaysa **zehir (8)** ye! Boyun kısalır ama enerjin dolar, ölmessin.
+2. **Alan Daraltma:** Rakibin kafasını duvara veya kendi gövdene doğru sıkıştırmaya çalış. Onu hata yapmaya (v2.5'te buna zorlanıyor) itersen 3 puan senindir.
+3. **Torus Dünyası:** Harita kenarları sonsuzdur; sağdan çıkarsan soldan girersin. Bunu kaçış yolu olarak kullan.
+4. **Kod Güvenliği:** Kodun hata verirse veya belirlenen saniyeyi (örn: 0.1 sn) aşarsan o maçta hükmen mağlup sayılırsın.
+
+**ÖZETLE:** Kodla (Python) -> Eğit (JSON al) -> Arenada Yarıştır (Şampiyon Ol)!

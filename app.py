@@ -421,12 +421,9 @@ def train():
         # sadece dışarıdan bir Puan (Fitness) sistemi ile en iyi JSON ayarını bulup öğrenciye veririz.
         
         episodes = int(request.form.get("episodes", 50))
-        time_limit = float(request.form.get("time_limit", 0.1))
-        
-        # Basit Genetik Evrim Simülasyonu (Ajan1'in parametrelerini geliştireceğiz)
-        # Amacımız Ajan 1'e json okutarak en iyi meyveyi bulma veya rastgelelik oranını öğretmek.
-        # Not: Gerçek RL olmadığı için .py kodunun yapısını değiştiremeyiz, 
-        # sadece dışarıdan bir Puan (Fitness) sistemi ile en iyi JSON ayarını bulup öğrenciye veririz.
+        time_limit_raw = float(request.form.get("time_limit", 0))
+        # Eğer time_limit 0 gelirse kısıtlama yok demektir (None veya çok yüksek bir sayı)
+        time_limit = time_limit_raw if time_limit_raw > 0 else None
         
         best_fitness = -9999
         best_params = {"tercih_edilen_meyve": 6, "rastgelelik_orani": 1.0}
