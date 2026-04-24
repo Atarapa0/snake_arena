@@ -27,14 +27,62 @@ function drawGrid(state) {
   }
   if (!state || !state.snakes) return;
 
-  // Yem
-  if (state.food) {
+  // Duvarlar
+  if (state.walls) {
+    state.walls.forEach(([r, c]) => {
+      ctx.fillStyle = "#374151";
+      ctx.fillRect(c * CELL + 1, r * CELL + 1, CELL - 2, CELL - 2);
+      // Duvar deseni
+      ctx.strokeStyle = "#1f2937";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(c * CELL + 3, r * CELL + 3, CELL - 6, CELL - 6);
+    });
+  }
+
+  // Meyveler (çoklu)
+  if (state.fruits) {
+    const fruitColors = {
+      6: { fill: "#ef4444", glow: "rgba(239,68,68,0.4)", emoji: "" },   // Kırmızı Elma
+      7: { fill: "#fbbf24", glow: "rgba(251,191,36,0.4)", emoji: "" },   // Altın Elma
+      8: { fill: "#a855f7", glow: "rgba(168,85,247,0.4)", emoji: "" },   // Zehirli Meyve
+    };
+    state.fruits.forEach(f => {
+      const [r, c] = f.pos;
+      const t = f.type;
+      const color = fruitColors[t] || { fill: "#ef4444", glow: "rgba(239,68,68,0.3)" };
+      
+      // Glow efekti
+      ctx.fillStyle = color.glow;
+      ctx.beginPath();
+      ctx.arc(c * CELL + CELL / 2, r * CELL + CELL / 2, CELL / 2 + 1, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Ana meyve
+      ctx.fillStyle = color.fill;
+      ctx.beginPath();
+      ctx.arc(c * CELL + CELL / 2, r * CELL + CELL / 2, CELL / 2 - 2, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Zehirli meyve için X işareti
+      if (t === 8) {
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2;
+        const cx = c * CELL + CELL / 2, cy = r * CELL + CELL / 2, sz = 4;
+        ctx.beginPath(); ctx.moveTo(cx - sz, cy - sz); ctx.lineTo(cx + sz, cy + sz); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cx + sz, cy - sz); ctx.lineTo(cx - sz, cy + sz); ctx.stroke();
+      }
+    });
+  }
+  
+  // Eski format uyumluluğu (tek yem)
+  if (state.food && !state.fruits) {
     const [r, c] = state.food;
     ctx.fillStyle = COLORS.food;
     ctx.beginPath();
     ctx.arc(c * CELL + CELL / 2, r * CELL + CELL / 2, CELL / 2 - 2, 0, Math.PI * 2);
     ctx.fill();
   }
+
   // Yılanlar
   state.snakes.forEach((s, idx) => {
     const body = s.alive ? COLORS[`s${idx}_body`] : COLORS.dead;
@@ -43,7 +91,19 @@ function drawGrid(state) {
       const isHead = i === s.body.length - 1;
       ctx.fillStyle = isHead ? head : body;
       const [r, c] = cell;
-      ctx.fillRect(c * CELL + 1, r * CELL + 1, CELL - 2, CELL - 2);
+      if (isHead) {
+        // Kafa için yuvarlak köşeli kare
+        const x = c * CELL + 1, y = r * CELL + 1, w = CELL - 2, h = CELL - 2, rad = 4;
+        ctx.beginPath();
+        ctx.moveTo(x + rad, y);
+        ctx.lineTo(x + w - rad, y); ctx.quadraticCurveTo(x + w, y, x + w, y + rad);
+        ctx.lineTo(x + w, y + h - rad); ctx.quadraticCurveTo(x + w, y + h, x + w - rad, y + h);
+        ctx.lineTo(x + rad, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - rad);
+        ctx.lineTo(x, y + rad); ctx.quadraticCurveTo(x, y, x + rad, y);
+        ctx.closePath(); ctx.fill();
+      } else {
+        ctx.fillRect(c * CELL + 1, r * CELL + 1, CELL - 2, CELL - 2);
+      }
     });
   });
 }
@@ -147,21 +207,25 @@ function renderLeaderboard(rows) {
   const tbody = document.querySelector("#leaderboard tbody");
   tbody.innerHTML = "";
   if (!rows || rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" style="color:#94a3b8;text-align:center">Henüz veri yok</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="color:#94a3b8;text-align:center">Henüz veri yok</td></tr>`;
     return;
   }
   rows.forEach((r, i) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `<td>${i+1}</td><td>${r.name}</td>
-                    <td>${r.last_rank ?? '-'}</td>
-                    <td><b>${r.total}</b></td>
-                    <td>${r.attempts}</td>`;
+                    <td>${r.played || 0}</td>
+                    <td>${r.wins || 0}</td>
+                    <td>${r.draws || 0}</td>
+                    <td>${r.losses || 0}</td>
+                    <td><b>${r.total || 0}</b></td>
+                    <td>${r.avg || 0}</td>`;
     tbody.appendChild(tr);
   });
 }
 
 function renderHistory(hist) {
   const div = document.getElementById("history");
+  if (!div) return;
   if (!hist || hist.length === 0) {
     div.innerHTML = `<div style="color:#94a3b8">Maç yok</div>`; return;
   }
@@ -188,7 +252,7 @@ async function poll() {
       fetch("/api/players_info").then(r => r.json()),
       fetch("/api/leaderboard").then(r => r.json()),
     ]);
-    globalPlayersList = pi.players.filter(p => !p.oversized && p.has_params).map(p => p.name);
+    globalPlayersList = pi.players.filter(p => !p.oversized).map(p => p.name);
     setPhase(s.phase, s.tournament_id);
     renderPlayersInfo(pi.players, pi.mb_limit);
     renderBracket(s.queue, s.current_match, s.match_history);
@@ -254,6 +318,11 @@ document.getElementById("uploadForm").addEventListener("submit", async (ev) => {
 
 document.getElementById("startBtn").addEventListener("click", async () => {
   const perPlayer = document.getElementById("perPlayerInput").value;
+  // Başlamadan önce ayarları beklemeden gönder (debounce iptal)
+  if (configDebounce) { clearTimeout(configDebounce); }
+  const t_lim = parseFloat(document.getElementById("timeLimitInput").value);
+  await postConfig({ time_limit: isNaN(t_lim) ? 0.1 : t_lim });
+  
   const r = await fetch("/api/start", { 
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -308,6 +377,10 @@ document.getElementById("cancelManualStartBtn").addEventListener("click", () => 
 
 document.getElementById("confirmManualStartBtn").addEventListener("click", async () => {
   if (myCustomMatches.length === 0) return alert("Lütfen en az 1 maç ekleyin.");
+  if (configDebounce) { clearTimeout(configDebounce); }
+  const t_lim = parseFloat(document.getElementById("timeLimitInput").value);
+  await postConfig({ time_limit: isNaN(t_lim) ? 0.1 : t_lim });
+
   const r = await fetch("/api/start", { 
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -393,6 +466,7 @@ window.handleMatchChange = (e, currentIndex) => {
 
 function renderManualList() {
   const container = document.getElementById("sortablePlayers");
+  if (!container) return;
   let html = "";
   
   for (let i = 0; i < manualList.length; i++) {
@@ -426,6 +500,10 @@ function renderManualList() {
 }
 
 document.getElementById("confirmManualStartBtn").addEventListener("click", async () => {
+  if (configDebounce) { clearTimeout(configDebounce); }
+  const t_lim = parseFloat(document.getElementById("timeLimitInput").value);
+  await postConfig({ time_limit: isNaN(t_lim) ? 0.1 : t_lim });
+
   const r = await fetch("/api/start", { 
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -444,11 +522,14 @@ document.getElementById("resetBtn").addEventListener("click", async () => {
   await fetch("/api/reset", { method: "POST" });
 });
 
-document.getElementById("resetBracketBtn").addEventListener("click", async (e) => {
-  e.stopPropagation();
-  if (!confirm("Fikstürü ve oynanan turnuvayı tamamen sıfırlamak istiyor musunuz?")) return;
-  await fetch("/api/reset", { method: "POST" });
-});
+const resetBracketBtn = document.getElementById("resetBracketBtn");
+if (resetBracketBtn) {
+  resetBracketBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    if (!confirm("Fikstürü ve oynanan turnuvayı tamamen sıfırlamak istiyor musunuz?")) return;
+    await fetch("/api/reset", { method: "POST" });
+  });
+}
 
 document.getElementById("resetLbBtn").addEventListener("click", async (e) => {
   e.stopPropagation();
@@ -516,24 +597,28 @@ document.getElementById("timeLimitInput").addEventListener("input", handleConfig
 // Eski event listenerları eziyoruz, handleConfigInput hepsini toplu gönderiyor
 
 const foodPointsInput = document.getElementById("foodPointsInput");
-let fpDebounce = null;
-foodPointsInput.addEventListener("input", () => {
-  clearTimeout(fpDebounce);
-  fpDebounce = setTimeout(() => {
-    const v = parseInt(foodPointsInput.value);
-    if (!isNaN(v)) postConfig({food_points: v});
-  }, 400);
-});
+if (foodPointsInput) {
+  let fpDebounce = null;
+  foodPointsInput.addEventListener("input", () => {
+    clearTimeout(fpDebounce);
+    fpDebounce = setTimeout(() => {
+      const v = parseInt(foodPointsInput.value);
+      if (!isNaN(v)) postConfig({food_points: v});
+    }, 400);
+  });
+}
 
 const winPointsInput = document.getElementById("winPointsInput");
-let wpDebounce = null;
-winPointsInput.addEventListener("input", () => {
-  clearTimeout(wpDebounce);
-  wpDebounce = setTimeout(() => {
-    const v = parseInt(winPointsInput.value);
-    if (!isNaN(v)) postConfig({win_points: v});
-  }, 400);
-});
+if (winPointsInput) {
+  let wpDebounce = null;
+  winPointsInput.addEventListener("input", () => {
+    clearTimeout(wpDebounce);
+    wpDebounce = setTimeout(() => {
+      const v = parseInt(winPointsInput.value);
+      if (!isNaN(v)) postConfig({win_points: v});
+    }, 400);
+  });
+}
 
 // ---- Zip upload ----
 document.getElementById("zipForm").addEventListener("submit", async (ev) => {

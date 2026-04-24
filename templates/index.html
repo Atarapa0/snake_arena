@@ -76,9 +76,10 @@
       <summary>Tekli Yükleme</summary>
       <form id="uploadForm">
         <label>Ajan (.py)<input type="file" name="agent_file" accept=".py" required></label>
-        <label>Model dosyası (Opsiyonel)<input type="file" name="model_file"></label>
+        <label>Model dosyası (.json, .pth vb.)<input type="file" name="model_file" required></label>
         <button type="submit" class="secondary tiny" style="width:100%">Tekli Yükle</button>
       </form>
+      <div id="uploadMsg"></div>
     </details>
 
     <h2>Kayıtlı Oyuncular <span id="playerCount" class="count">0</span></h2>

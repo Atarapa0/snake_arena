@@ -2,13 +2,171 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>🐍 Snake Eğitim Modülü</title>
+<title>🐍 Snake Eğitim Modülü - Gerçek Sinir Ağı Eğitimi</title>
 <link rel="stylesheet" href="/static/style.css">
 <style>
-  .training-container { display: flex; gap: 20px; }
-  .train-settings { flex: 1; }
-  .train-console { flex: 2; background: #0f172a; padding: 1.5rem; border-radius: 8px; border: 1px solid #334155; }
-  .log-area { font-family: monospace; color: #4ade80; background: #000; height: 300px; padding: 10px; overflow-y: auto; border-radius: 5px; margin-top: 10px; border: 1px solid #1e293b; }
+  .training-container { display: flex; gap: 20px; flex-wrap: wrap; }
+  .train-settings { flex: 1; min-width: 320px; }
+  .train-console { flex: 2; min-width: 400px; background: #0f172a; padding: 1.5rem; border-radius: 8px; border: 1px solid #334155; }
+  
+  .log-area { 
+    font-family: 'JetBrains Mono', ui-monospace, monospace; 
+    color: #4ade80; 
+    background: #000; 
+    height: 400px; 
+    padding: 12px; 
+    overflow-y: auto; 
+    border-radius: 8px; 
+    margin-top: 10px; 
+    border: 1px solid #1e293b; 
+    font-size: 0.82rem;
+    line-height: 1.6;
+  }
+  
+  .log-area .log-info { color: #60a5fa; }
+  .log-area .log-warn { color: #fbbf24; }
+  .log-area .log-error { color: #f87171; }
+  .log-area .log-success { color: #4ade80; font-weight: bold; }
+  .log-area .log-divider { color: #475569; }
+  
+  .param-group {
+    background: rgba(255,255,255,0.03);
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    border: 1px solid #334155;
+  }
+  .param-group h3 {
+    margin: 0 0 8px 0;
+    font-size: 0.85rem;
+    color: #93c5fd;
+  }
+  .param-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .param-row label {
+    font-size: 0.78rem;
+    color: #cbd5e1;
+    margin: 0;
+  }
+  .param-row input {
+    width: 100%;
+    margin-top: 3px;
+    padding: 5px 8px;
+    background: #0a0c12;
+    border: 1px solid #2a2f3d;
+    color: #e6e8ec;
+    border-radius: 4px;
+    font-size: 0.85rem;
+  }
+  
+  .fruit-config {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .fruit-card {
+    padding: 8px;
+    border-radius: 6px;
+    text-align: center;
+    border: 1px solid #334155;
+  }
+  .fruit-card.red { background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); }
+  .fruit-card.gold { background: rgba(251, 191, 36, 0.1); border-color: rgba(251, 191, 36, 0.3); }
+  .fruit-card.poison { background: rgba(168, 85, 247, 0.1); border-color: rgba(168, 85, 247, 0.3); }
+  .fruit-card .fruit-title { font-size: 0.75rem; font-weight: bold; margin-bottom: 5px; }
+  .fruit-card input { width: 50px; margin: 2px; }
+  .fruit-card .input-label { font-size: 0.65rem; color: #94a3b8; display: block; }
+
+  .progress-bar {
+    width: 100%;
+    height: 6px;
+    background: #1e293b;
+    border-radius: 3px;
+    margin-top: 8px;
+    overflow: hidden;
+  }
+  .progress-bar .fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #4ade80);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+    width: 0%;
+  }
+  
+  .status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .status-badge.idle { background: #2a2f3d; color: #94a3b8; }
+  .status-badge.running { background: #1e3a2e; color: #4ade80; animation: pulse 1.4s infinite; }
+  .status-badge.done { background: #3a2e1e; color: #fbbf24; }
+  .status-badge.error { background: #3a1e1e; color: #f87171; }
+  
+  @keyframes pulse { 50% { opacity: 0.6; } }
+  
+  .download-section {
+    margin-top: 15px;
+    text-align: center;
+    padding: 15px;
+    background: rgba(74, 222, 128, 0.05);
+    border-radius: 8px;
+    border: 1px solid rgba(74, 222, 128, 0.2);
+  }
+  .download-section.disabled {
+    background: rgba(255,255,255,0.02);
+    border-color: #334155;
+  }
+  
+  .btn-download {
+    font-size: 1.1rem;
+    padding: 12px 24px;
+    background: linear-gradient(135deg, #16a34a, #059669);
+    border: none;
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 700;
+    transition: all 0.2s;
+  }
+  .btn-download:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(22, 163, 74, 0.4); }
+  .btn-download:disabled { opacity: 0.3; cursor: not-allowed; transform: none; box-shadow: none; }
+  
+  .btn-train {
+    width: 100%;
+    height: 48px;
+    font-weight: bold;
+    font-size: 1rem;
+    margin-top: 12px;
+    background: linear-gradient(135deg, #3b82f6, #6366f1);
+    border: none;
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+  }
+  .btn-train:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
+  .btn-train:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+  
+  .info-box {
+    background: rgba(96, 165, 250, 0.08);
+    border: 1px solid rgba(96, 165, 250, 0.2);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 0.78rem;
+    color: #94a3b8;
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
+  .info-box b { color: #60a5fa; }
 </style>
 </head>
 <body>
@@ -22,166 +180,351 @@
 
 <main class="training-container">
   <section class="panel train-settings">
-    <h2>1️⃣ Modelleri Yükle</h2>
-    <form id="trainUploadForm">
-      <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px dashed #475569;">
-        <label style="font-weight: bold; color: #60a5fa;">Ana Ajan (Eğitilecek): 
-          <input type="file" id="agent1" name="agent1_file" accept=".py" required style="margin-top:5px;">
-        </label>
-        <hr style="border: 0; border-top: 1px solid #334155; margin: 15px 0;">
-        <label style="font-weight: bold; color: #f87171;">Rakip Ajan (Zorunlu): 
-          <input type="file" id="agent2" name="agent2_file" accept=".py" required style="margin-top:5px;">
-        </label>
+    <h2>🧠 Gerçek Sinir Ağı Eğitimi</h2>
+    
+    <div class="info-box">
+      <b>Nasıl Çalışır?</b> İki ajan dosyası (.py) yükleyin. Sistem <b>Evolution Strategy (ES)</b> 
+      algoritması ile <b>904→64→64→4</b> sinir ağını <b>sıfırdan</b> eğitir. Yüklediğiniz her iki 
+      ajana karşı binlerce oyun simüle eder ve ağırlıkları evrimleştirir. Sonuçta indireceğiniz 
+      <b>model.json</b> dosyasını arenada kullanabilirsiniz.
+    </div>
+    
+    <form id="trainForm">
+      <!-- İki Ajan Yükleme -->
+      <div class="param-group">
+        <h3>🐍 Rakip Ajanlar (Antrenman Partnerleri)</h3>
+        <p class="hint tiny" style="margin:0 0 8px 0;">Eğitilecek sinir ağı bu iki rakibe karşı oyun oynayarak öğrenecek. İki farklı ajan yüklerseniz daha güçlü model çıkar.</p>
+        <div class="param-row">
+          <label style="font-weight: bold; color: #60a5fa; font-size: 0.85rem;">
+            1. Ajan (.py):
+            <input type="file" id="agent1" name="agent1_file" accept=".py" required style="margin-top:5px;">
+          </label>
+          <label style="font-weight: bold; color: #f87171; font-size: 0.85rem;">
+            2. Ajan (.py):
+            <input type="file" id="agent2" name="agent2_file" accept=".py" required style="margin-top:5px;">
+          </label>
+        </div>
       </div>
       
-      <div id="settingsArea">
-        <label>Eğitim Tur Sayısı:
-          <input type="number" id="trainEpisodes" value="50" min="1" step="1">
-        </label>
-        
-        <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 6px; margin-top: 10px; border: 1px solid #334155;">
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-            <input type="checkbox" id="enableTimeLimit" style="width: auto;">
-            <span>Zaman Kısıtlaması Uygula</span>
+      <!-- Eğitim Parametreleri -->
+      <div class="param-group">
+        <h3>⚙ Eğitim Parametreleri</h3>
+        <div class="param-row">
+          <label>Nesil Sayısı (Generations):
+            <input type="number" id="generations" value="60" min="10" max="500" step="10">
           </label>
-          <div id="timeLimitContainer" style="margin-top: 8px; display: none;">
-            <label style="font-size: 0.8rem;">Maks. Hamle Süresi (sn):
-              <input type="number" id="timeLimit" value="0.1" min="0.01" step="0.01">
-            </label>
+          <label>Popülasyon Boyutu:
+            <input type="number" id="population_size" value="30" min="10" max="100" step="2">
+          </label>
+        </div>
+        <div class="param-row">
+          <label>Oyun/Değerlendirme:
+            <input type="number" id="games_per_eval" value="3" min="1" max="10" step="1">
+          </label>
+          <label>Maks Adım/Oyun:
+            <input type="number" id="max_steps" value="500" min="100" max="2000" step="50">
+          </label>
+        </div>
+        <div class="param-row">
+          <label>Sigma (Gürültü):
+            <input type="number" id="sigma" value="0.05" min="0.001" max="0.5" step="0.005">
+          </label>
+          <label>Öğrenme Oranı:
+            <input type="number" id="learning_rate" value="0.03" min="0.001" max="0.2" step="0.005">
+          </label>
+        </div>
+      </div>
+      
+      <!-- Zaman Kısıtlaması -->
+      <div class="param-group">
+        <h3>⏱ Zaman Kısıtlaması</h3>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
+          <input type="checkbox" id="enableTimeLimit" style="width: auto;">
+          <span>Zaman kısıtlaması uygula (0.1 sn)</span>
+        </label>
+        <div id="timeLimitContainer" style="margin-top: 8px; display: none;">
+          <label style="font-size: 0.8rem;">Maks. hamle süresi (sn):
+            <input type="number" id="timeLimit" value="0.1" min="0.01" step="0.01">
+          </label>
+        </div>
+      </div>
+      
+      <!-- Meyve Ayarları (Arena ile senkron) -->
+      <div class="param-group">
+        <h3>🍎 Meyve Ödülleri (Arena Ayarlarıyla Aynı)</h3>
+        <p class="hint tiny" style="margin:0 0 8px 0;">Bu değerler eğitim sırasında kullanılır. Arenada ne ayarladıysan burada da aynısını gir.</p>
+        <div class="fruit-config">
+          <div class="fruit-card red">
+            <div class="fruit-title" style="color:#ef4444;">🔴 Kırmızı (6)</div>
+            <span class="input-label">Boy</span>
+            <input type="number" id="f6_len" value="1" style="width:50px;">
+            <span class="input-label">Enerji</span>
+            <input type="number" id="f6_egy" value="20" style="width:50px;">
+          </div>
+          <div class="fruit-card gold">
+            <div class="fruit-title" style="color:#fbbf24;">🟡 Altın (7)</div>
+            <span class="input-label">Boy</span>
+            <input type="number" id="f7_len" value="3" style="width:50px;">
+            <span class="input-label">Enerji</span>
+            <input type="number" id="f7_egy" value="50" style="width:50px;">
+          </div>
+          <div class="fruit-card poison">
+            <div class="fruit-title" style="color:#a855f7;">☠️ Zehir (8)</div>
+            <span class="input-label">Boy</span>
+            <input type="number" id="f8_len" value="-2" style="width:50px;">
+            <span class="input-label">Enerji</span>
+            <input type="number" id="f8_egy" value="100" style="width:50px;">
           </div>
         </div>
       </div>
-
-      <button type="submit" class="primary" style="width:100%; height: 45px; font-weight: bold; margin-top: 15px;">🚀 Eğitimi Başlat</button>
+      
+      <button type="submit" class="btn-train" id="trainBtn">🚀 Eğitimi Başlat</button>
     </form>
   </section>
 
   <section class="train-console">
-    <h2>Lokal Eğitim Konsolu <span id="trainStatus" style="color: #94a3b8; font-size:0.8em;">(Bekliyor)</span></h2>
-    <div class="log-area" id="logArea">
-      [System] Bekleniyor... Eğitmek için sol taraftan '.py' dosyanızı yükleyin.
+    <h2>
+      Eğitim Konsolu 
+      <span class="status-badge idle" id="trainStatusBadge">HAZIR</span>
+    </h2>
+    
+    <div class="progress-bar" id="progressBarContainer" style="display:none;">
+      <div class="fill" id="progressFill"></div>
     </div>
+    
+    <div class="log-area" id="logArea">[System] Bekleniyor... Rakip ajan (.py) dosyanızı seçip "Eğitimi Başlat" butonuna basın.
+[System] Bu sistem gerçek sinir ağı eğitimi yapar — Evolution Strategy (ES) ile.
+[System] Eğitim sonunda model.json dosyasını indirip arenada kullanabilirsiniz.</div>
 
-    <div style="margin-top: 15px; text-align: center;">
-      <p style="color: #fbc02d; font-size: 0.9rem;" id="dlHint">Eğitim tamamlandığında (En iyi ajan bulununca) parametreleriniz indirilebilir hale gelecektir.</p>
-      <button id="downloadBtn" class="secondary" style="font-size: 1.1rem; padding: 10px 20px; opacity: 0.5; pointer-events: none;" disabled>
-        📥 En İyi Parametre Dosyasını (.json) İndir
+    <div class="download-section disabled" id="downloadSection">
+      <p style="color: #94a3b8; font-size: 0.85rem; margin: 0 0 10px 0;" id="dlHint">
+        Eğitim tamamlandığında model.json dosyanız indirilebilir hale gelecektir.
+      </p>
+      <button id="downloadBtn" class="btn-download" disabled>
+        📥 Eğitilmiş Modeli İndir (model.json)
       </button>
     </div>
   </section>
 </main>
+
 <script>
-  let trainedParams = null;
-
-  document.getElementById("trainUploadForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
+  let pollInterval = null;
+  let lastLogCount = 0;
+  
+  // ===== FORM SUBMIT =====
+  document.getElementById("trainForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    
+    const a1 = document.getElementById("agent1").files[0];
+    const a2 = document.getElementById("agent2").files[0];
+    if (!a1 || !a2) {
+      alert("Her iki ajan dosyasını da seçmelisiniz!");
+      return;
+    }
+    
+    const btn = document.getElementById("trainBtn");
+    const logArea = document.getElementById("logArea");
+    
+    // Form verileri
+    let formData = new FormData();
+    formData.append("agent1_file", a1);
+    formData.append("agent2_file", a2);
+    formData.append("generations", document.getElementById("generations").value);
+    formData.append("population_size", document.getElementById("population_size").value);
+    formData.append("games_per_eval", document.getElementById("games_per_eval").value);
+    formData.append("max_steps", document.getElementById("max_steps").value);
+    formData.append("sigma", document.getElementById("sigma").value);
+    formData.append("learning_rate", document.getElementById("learning_rate").value);
+    
+    // Zaman limiti
+    const timeEnabled = document.getElementById("enableTimeLimit").checked;
+    formData.append("time_limit", timeEnabled ? document.getElementById("timeLimit").value : "0");
+    
+    // Meyve ayarları
+    for (let id of ["6", "7", "8"]) {
+      formData.append(`f${id}_len`, document.getElementById(`f${id}_len`).value);
+      formData.append(`f${id}_egy`, document.getElementById(`f${id}_egy`).value);
+    }
+    
+    // UI güncelle
+    btn.disabled = true;
+    setStatus("running", "EĞİTİM SÜRÜYOR...");
+    logArea.innerHTML = "";
+    appendLog("[System] Eğitim başlatılıyor...", "log-info");
+    lastLogCount = 0;
+    
+    // Eğitimi başlat
+    try {
+      const resp = await fetch("/api/train", {
+        method: "POST",
+        body: formData
+      });
+      const result = await resp.json();
       
-      const log = document.getElementById("logArea");
-      const btn = e.submitter;
-      
-      const a1 = document.getElementById("agent1").files[0];
-      const a2 = document.getElementById("agent2").files[0];
-      
-      if (!a1 || !a2) {
-          alert("Eğitim için her iki ajanı da seçmek zorunludur!");
-          return;
+      if (!result.ok) {
+        appendLog(`[HATA] ${result.error}`, "log-error");
+        setStatus("error", "HATA");
+        btn.disabled = false;
+        return;
       }
       
-      let formData = new FormData();
-      formData.append("agent1_file", a1);
-      formData.append("agent2_file", a2);
-      formData.append("episodes", document.getElementById("trainEpisodes").value);
+      appendLog("[System] Eğitim arka planda başlatıldı!", "log-success");
       
-      const timeEnabled = document.getElementById("enableTimeLimit").checked;
-      if (timeEnabled) {
-          formData.append("time_limit", document.getElementById("timeLimit").value);
-      } else {
-          formData.append("time_limit", "0"); // 0 = Limitsiz
-      }
+      // Progress polling başlat
+      startPolling();
       
-      btn.disabled = true;
-      btn.style.opacity = 0.5;
-      document.getElementById("trainStatus").innerText = "(Eğitim Sürüyor... Lütfen Bekleyin)";
-      log.innerHTML += "<br><br>[Eğitim] Modeller yüklendi. Lokal oyun motorunda genetik eğitim başlatılıyor...<br>";
-
-      try {
-          const resp = await fetch("/api/train", {
-              method: "POST",
-              body: formData
-          });
-          const result = await resp.json();
-          
-          btn.disabled = false;
-          btn.style.opacity = 1;
-          document.getElementById("trainStatus").innerText = "(Bitti)";
-
-          if (result.success) {
-              log.innerHTML += `<br><b style='color:#fbbf24'>[BAŞARILI]</b> Eğitim tamamlandı! <br>Fitness: ${result.fitness.toFixed(2)}<br>Parametreler optimize edildi.`;
-              trainedParams = result.best_params;
-              document.getElementById("downloadBtn").disabled = false;
-              document.getElementById("downloadBtn").style.opacity = 1;
-              document.getElementById("downloadBtn").style.pointerEvents = "auto";
-          } else {
-              log.innerHTML += `<br><b style='color:#f87171'>[HATA]</b> ${result.error}`;
+    } catch (err) {
+      appendLog(`[SİSTEM HATASI] Sunucuya ulaşılamadı: ${err}`, "log-error");
+      setStatus("error", "BAĞLANTI HATASI");
+      btn.disabled = false;
+    }
+  });
+  
+  // ===== POLLING =====
+  function startPolling() {
+    if (pollInterval) clearInterval(pollInterval);
+    document.getElementById("progressBarContainer").style.display = "block";
+    pollInterval = setInterval(pollStatus, 800);
+  }
+  
+  async function pollStatus() {
+    try {
+      const resp = await fetch("/api/train/status");
+      const s = await resp.json();
+      
+      // Yeni logları göster
+      if (s.logs && s.logs.length > 0) {
+        const logArea = document.getElementById("logArea");
+        // Sadece yeni logları ekle
+        const newLogs = s.logs.slice(Math.max(0, lastLogCount - (s.all_logs_count - s.logs.length)));
+        if (s.all_logs_count > lastLogCount) {
+          for (let i = Math.max(0, lastLogCount - (s.all_logs_count - s.logs.length)); i < s.logs.length; i++) {
+            const msg = s.logs[i];
+            let cls = "";
+            if (msg.includes("✅") || msg.includes("🏆")) cls = "log-success";
+            else if (msg.includes("❌") || msg.includes("HATA")) cls = "log-error";
+            else if (msg.includes("📈") || msg.includes("⚠")) cls = "log-warn";
+            else if (msg.startsWith("─")) cls = "log-divider";
+            else if (msg.includes("🧠") || msg.includes("📊") || msg.includes("🏋") || msg.includes("⚙") || msg.includes("⏱")) cls = "log-info";
+            appendLog(msg, cls);
           }
-      } catch (err) {
-          log.innerHTML += `<br><b style='color:#f87171'>[SİSTEM HATASI]</b> Sunucuya ulaşılamadı.`;
-          btn.disabled = false;
-          btn.style.opacity = 1;
+          lastLogCount = s.all_logs_count;
+        }
       }
-  });
-
-  document.getElementById("downloadBtn").addEventListener("click", () => {
       
-      try {
-          const res = await fetch("/api/train", {
-              method: "POST",
-              body: formData
-          });
-          const data = await res.json();
-          
-          if (!data.ok) {
-              log.innerHTML += `<br><span style="color:#ef4444">[Hata] ${data.error}</span>`;
-              document.getElementById("trainStatus").innerText = "(Hata)";
-          } else {
-              log.innerHTML += `<br><span style="color:#4ade80">[Başarılı] Eğitim tamamlandı!</span>`;
-              data.log.forEach(line => {
-                  log.innerHTML += `<br>> ${line}`;
-              });
-              
-              trainedParams = data.best_params;
-              
-              const dBtn = document.getElementById("downloadBtn");
-              dBtn.disabled = false;
-              dBtn.style.opacity = 1;
-              dBtn.style.pointerEvents = "auto";
-              document.getElementById("trainStatus").innerText = "(Tamamlandı)";
-          }
-      } catch (err) {
-          log.innerHTML += `<br><span style="color:#ef4444">[Ağ Hatası] ${err}</span>`;
-          document.getElementById("trainStatus").innerText = "(Ağ Hatası)";
-      } finally {
-          btn.disabled = false;
-          btn.style.opacity = 1;
-          log.scrollTop = log.scrollHeight;
+      // Progress bar güncelle (yaklaşık)
+      if (s.running) {
+        // Log sayısına göre yaklaşık progress
+        const gen = parseInt(document.getElementById("generations").value) || 60;
+        const expectedLogs = gen / 5 + 10;
+        const progress = Math.min(95, (s.all_logs_count / expectedLogs) * 100);
+        document.getElementById("progressFill").style.width = progress + "%";
       }
+      
+      // Tamamlandı mı?
+      if (s.done) {
+        setStatus("done", "TAMAMLANDI ✅");
+        document.getElementById("progressFill").style.width = "100%";
+        document.getElementById("trainBtn").disabled = false;
+        
+        // İndirme butonunu aktifle
+        const dlSection = document.getElementById("downloadSection");
+        dlSection.classList.remove("disabled");
+        const dlBtn = document.getElementById("downloadBtn");
+        dlBtn.disabled = false;
+        document.getElementById("dlHint").innerHTML = 
+          `<b style="color:#4ade80;">✅ Model hazır!</b> Fitness: ${s.best_fitness.toFixed(1)} — Aşağıdaki butona basarak model.json dosyanızı indirin.`;
+        
+        stopPolling();
+      }
+      
+      // Hata mı?
+      if (s.error) {
+        setStatus("error", "HATA");
+        document.getElementById("trainBtn").disabled = false;
+        stopPolling();
+      }
+      
+      // Artık çalışmıyor ama done değilse
+      if (!s.running && !s.done && !s.error) {
+        // Henüz başlamamış olabilir, birkaç saniye bekle
+      }
+      
+    } catch (err) {
+      console.error("Poll error:", err);
+    }
+  }
+  
+  function stopPolling() {
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+  }
+  
+  // ===== İNDİRME =====
+  document.getElementById("downloadBtn").addEventListener("click", async () => {
+    try {
+      const resp = await fetch("/api/train/download");
+      if (!resp.ok) {
+        const err = await resp.json();
+        alert(err.error || "İndirme hatası!");
+        return;
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "model.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      appendLog("[System] 📥 model.json indirildi!", "log-success");
+    } catch (err) {
+      alert("İndirme hatası: " + err);
+    }
   });
-
-  document.getElementById("downloadBtn").addEventListener("click", () => {
-      if (!trainedParams) return;
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(trainedParams, null, 2));
-      const node = document.createElement('a');
-      node.setAttribute("href",     dataStr);
-      node.setAttribute("download", "trained_params.json");
-      document.body.appendChild(node);
-      node.click();
-      node.remove();
-  });
-
-  // Zaman kısıtlaması checkbox kontrolü
+  
+  // ===== YARDIMCI FONKSİYONLAR =====
+  function appendLog(msg, cls) {
+    const logArea = document.getElementById("logArea");
+    const div = document.createElement("div");
+    div.className = cls || "";
+    div.textContent = msg;
+    logArea.appendChild(div);
+    logArea.scrollTop = logArea.scrollHeight;
+  }
+  
+  function setStatus(state, text) {
+    const badge = document.getElementById("trainStatusBadge");
+    badge.className = "status-badge " + state;
+    badge.textContent = text;
+  }
+  
+  // Zaman kısıtlaması checkbox
   document.getElementById("enableTimeLimit").addEventListener("change", (e) => {
-      document.getElementById("timeLimitContainer").style.display = e.target.checked ? "block" : "none";
+    document.getElementById("timeLimitContainer").style.display = e.target.checked ? "block" : "none";
   });
+  
+  // Sayfa açıldığında arena ayarlarını çek
+  (async function syncArenaSettings() {
+    try {
+      const resp = await fetch("/api/config");
+      const cfg = await resp.json();
+      if (cfg.fruit_rewards) {
+        for (let id of ["6", "7", "8"]) {
+          if (cfg.fruit_rewards[id]) {
+            document.getElementById(`f${id}_len`).value = cfg.fruit_rewards[id].len;
+            document.getElementById(`f${id}_egy`).value = cfg.fruit_rewards[id].egy;
+          }
+        }
+      }
+      if (cfg.time_limit) {
+        document.getElementById("timeLimit").value = cfg.time_limit;
+      }
+    } catch(e) { /* sessizce geç */ }
+  })();
 </script>
 </body>
 </html>

@@ -35,15 +35,89 @@ class MyAgent(BaseAgent):
         pass
 ```
 
+### Sinir Ağı Kullanmak İsteyenler İçin (model.json ile):
+
+Eğer kendi sinir ağı modelinizi kullanmak istiyorsanız, aşağıdaki formatta bir `.py` dosyası yazın:
+
+```python
+import os
+import json
+import numpy as np
+from base_agent import BaseAgent
+
+class MyAgent(BaseAgent):
+    def __init__(self, name="BenimAjan", data_dir=None):
+        super().__init__(name=name, data_dir=data_dir)
+        
+        # JSON model dosyasının yolunu bul
+        if self.data_dir:
+            json_path = os.path.join(self.data_dir, "model.json")
+        else:
+            json_path = "model.json"
+            
+        # Modeli (Beyni) Yükle
+        with open(json_path, "r") as f:
+            weights = json.load(f)
+            
+        # Json'daki listeleri Numpy matrislerine çevir
+        self.w1 = np.array(weights["w1"])
+        self.b1 = np.array(weights["b1"])
+        self.w2 = np.array(weights["w2"])
+        self.b2 = np.array(weights["b2"])
+        self.w_out = np.array(weights["w_out"])
+        self.b_out = np.array(weights["b_out"])
+
+    def act(self, obs: dict) -> int:
+        grid = obs["grid"]
+        stats = obs["stats"]
+
+        # Girdi verisini düzleştir
+        grid_flat = np.array(grid, dtype=np.float32).flatten()
+        stats_array = np.array(stats, dtype=np.float32)
+        x = np.concatenate((grid_flat, stats_array)) # 904 elemanlı veri
+
+        # İLERİ BESLEMELİ SİNİR AĞI
+        x = np.dot(self.w1, x) + self.b1
+        x = np.tanh(x)
+        x = np.dot(self.w2, x) + self.b2
+        x = np.tanh(x)
+        logits = np.dot(self.w_out, x) + self.b_out
+        
+        return int(np.argmax(logits))
+
+    def handle_reward(self, reward: float, done: bool):
+        pass
+```
+
 ---
 
 ## 🏋️ 3. EĞİTİM (TRAINING) NASIL YAPILIR?
-Eğitim sayfası, yazdığın kodun hangi meyveye odaklanacağını senin yerine test ederek sana en iyi **zeka dosyasını (.json)** verir.
-1. **Modelini Yükle:** Kendi yazdığın `.py` dosyasını seç.
-2. **Rakibini Yükle:** Karşısında yarışacağı bir rakip `.py` dosyası seç (Eğitim için rakip şarttır!).
-3. **Eğitimi Başlat:** Sistem 50-100 maç yapar ve en iyi parametreleri bulur.
-4. **Zaman Kısıtlaması (Opsiyonel):** Eğer kutucuğu işaretlersen, yılanın 0.1 saniye gibi kısıtlı sürede karar vermeye zorlanır.
-5. **İndir:** Eğitim bitince sana bir `.json` dosyası verir. Bu senin "beynin"dir.
+
+Eğitim sayfası, sinir ağı modelini **sıfırdan eğitir** ve size kullanıma hazır bir `model.json` dosyası verir.
+
+### ⚠️ ÖNEMLİ: Eğitim = Gerçek Sinir Ağı Eğitimi
+Sistem **Evolution Strategy (ES)** algoritması kullanır. Bu:
+- 904→64→64→4 mimarisinde bir sinir ağı oluşturur
+- Rakip ajana karşı **binlerce oyun simüle eder**
+- Her nesilde en başarılı ağırlıkları seçip evrimleştirir
+- Sonuçta **gerçekten eğitilmiş** bir `model.json` üretir
+
+### Eğitim Adımları:
+1. **Eğitim Sayfasına Git:** Üst menüden `🏋️ EĞİTİM MERKEZİ` sekmesine tıkla.
+2. **Rakip Ajan Yükle:** Sinir ağının karşısında antrenman yapacağı rakip `.py` dosyasını seç.
+3. **Parametreleri Ayarla:**
+   - **Nesil Sayısı:** Kaç nesil eğitim yapılacak (daha fazla = daha iyi ama daha yavaş). 60-100 arası önerilir.
+   - **Popülasyon Boyutu:** Her nesilde kaç aday denenecek. 20-40 arası ideal.
+   - **Meyve Ödülleri:** Arenada kullanılan değerlerin **aynısını** girin! Eğer arenada zehirli meyve boy=-2 ise, eğitimde de -2 olmalı.
+   - **Zaman Kısıtlaması:** Eğer arenada 0.1 sn sınır varsa, bunu açın.
+4. **Eğitimi Başlat:** Butona bas ve konsolda ilerlemeyi takip et.
+5. **Model İndir:** Eğitim bitince `model.json` dosyasını indir.
+6. **Arenaya Yükle:** İndirdiğin `model.json` + `.py` dosyanı arenaya yükle.
+
+### Eğitim İpuçları:
+- **Güçlü rakip seç:** Ne kadar iyi bir rakibe karşı eğitirsen, modelin o kadar iyi olur.
+- **Meyve ayarlarını eşleştir:** Arena'daki meyve ödülleri neyse eğitimde de aynısını kullan.
+- **Nesil artır:** 60 nesilde iyi sonuç almazsan, 150-200 nesil dene.
 
 ---
 
@@ -53,6 +127,13 @@ Arenada yılanları yarıştırırken puanlar şöyledir (Ayarları değiştirme
 - **3 PUAN (K.O.):** Rakibi direkt öldürürsen (Senin gövdene veya duvara çarpması).
 - **2 PUAN (PUANLA):** Süre (Adım) bittiğinde hayatta kalıp rakibinden daha uzunsan.
 - **1 PUAN (BERABERLİK):** İkiniz de yaşarsanız ve boylarınız aynıysa.
+
+### Arenaya Nasıl Yüklerim?
+1. **Tekli Yükleme:** Sol panelde "Tekli Yükleme" bölümünden:
+   - `.py` dosyanı (agent kodu) seç
+   - `model.json` dosyanı (eğitilmiş ağırlıklar) seç
+   - "Tekli Yükle" butonuna bas
+2. **Toplu Yükleme (ZIP):** Birden fazla ajan yüklemek için ZIP kullanabilirsin.
 
 ### 🍎 MEYVE REHBERİ (Matris ID'leri)
 - **ID 6 (Kırmızı):** Boy +1, Enerji +20
@@ -68,4 +149,20 @@ Arenada yılanları yarıştırırken puanlar şöyledir (Ayarları değiştirme
 3. **Torus Dünyası:** Harita kenarları sonsuzdur; sağdan çıkarsan soldan girersin. Bunu kaçış yolu olarak kullan.
 4. **Kod Güvenliği:** Kodun hata verirse veya belirlenen saniyeyi (örn: 0.1 sn) aşarsan o maçta hükmen mağlup sayılırsın.
 
-**ÖZETLE:** Kodla (Python) -> Eğit (JSON al) -> Arenada Yarıştır (Şampiyon Ol)!
+---
+
+## 📁 DOSYA YAPISI
+```
+arena_v2/
+├── app.py              # Ana Flask sunucusu
+├── game_engine.py      # Oyun motoru (grid, yılanlar, meyveler, çarpışma)
+├── base_agent.py       # Tüm ajanların miras aldığı temel sınıf
+├── trainer.py          # Gerçek sinir ağı eğitim motoru (ES algoritması)
+├── example_agents/     # Örnek ajanlar
+├── templates/          # HTML sayfaları (arena + eğitim)
+├── static/             # CSS + JS
+├── uploads/            # Yüklenen ajanlar buraya kaydedilir
+└── README.md           # Bu dosya
+```
+
+**ÖZETLE:** Eğit (model.json al) → Kodla (Python + model.json) → Arenada Yarıştır (Şampiyon Ol)!

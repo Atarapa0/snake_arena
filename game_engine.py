@@ -280,6 +280,11 @@ class SnakeGame:
                 msg = f"{s.name} {rewards['name']} yedi ({sign_len}{rewards['len']} Boy, {sign_egy}{rewards['egy']} En)"
                 self.events_log.append((self.step_count, msg))
             
+            # === KUYRUK KESİMİ (Normal Snake Mekaniği) ===
+            # Yılanın gerçek boyu (len(body)) hedef boydan büyükse kuyruktan kes
+            while len(s.body) > s.target_length:
+                s.body.popleft()
+            
             # RL Geri Bildirimi (Başı sağ ise)
             if s.alive:
                 try: self.agents[i].handle_reward(step_reward, False)

@@ -11,12 +11,14 @@ import sys
 import json
 import time
 import shutil
+import copy
 import zipfile
 import tempfile
 import threading
 import importlib.util
 import inspect
 from pathlib import Path
+import logging
 
 import numpy as np
 from flask import Flask, request, jsonify, render_template
@@ -36,6 +38,10 @@ if str(BASE) not in sys.path:
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1 GB max upload (toplu zip için)
 
+# Terminali rahatlatan kod: Yalnızca hata seviyesindeki (ERROR) loglar çıksın.
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
+
 
 # ---------------- Global durum ----------------
 STATE_LOCK = threading.Lock()
@@ -51,9 +57,9 @@ STATE = {
     "match_history": [],   # played matches
     "time_limit": 0.1,     # saniye
     "fruit_rewards": {
-        "6": {"len": 1, "egy": 20, "name": "Kırmızı Elma"},
-        "7": {"len": 3, "egy": 50, "name": "Altın Elma"},
-        "8": {"len": -2, "egy": 100, "name": "Zehirli Meyve"}
+        6: {"len": 1, "egy": 20, "name": "Kırmızı Elma"},
+        7: {"len": 3, "egy": 50, "name": "Altın Elma"},
+        8: {"len": -2, "egy": 100, "name": "Zehirli Meyve"}
     }
 }
 
@@ -191,7 +197,9 @@ def player_info_list():
     for name in list_players():
         pdir = UPLOADS / name
         size = player_params_size_mb(name)
-        has_params = any(f.is_file() and f.suffix.lower() != ".py" for f in pdir.iterdir())
+        has_params = False
+        if pdir.exists():
+            has_params = any(f.is_file() and f.suffix.lower() != ".py" for f in pdir.iterdir())
         rows.append({
             "name": name,
             "params_mb": round(size, 3),
@@ -308,6 +316,69 @@ def play_match_blocking(player_a: str, player_b: str):
     return winner, game.snakes[0].length, game.snakes[1].length, game.step_count
 
 
+def process_match_points(m):
+    """
+    Lig usulü puanlama sistemi:
+    - Rakibi Doğrudan Elemek (Çarpma/Açlık): 3 Puan
+    - Adım Süresi Sonunda Boy Farkıyla Kazanmak: 2 Puan
+    - Beraberlik: 1 Puan
+    - Kaybetmek: 0 Puan
+    """
+    if not m.get("played"):
+        return
+    
+    p1 = m["p1"]
+    p2 = m["p2"]
+    winner = m.get("winner")
+    reason = m.get("reason", "")
+    
+    # Puanları hesapla
+    p1_pts = 0
+    p2_pts = 0
+    
+    # Kazananı belirle ve puan tipini saptla
+    ko_keywords = ["duvara çarptı", "gövdesine çarptı", "gövdeye çarptı", "enerjisi bitti", 
+                    "açlıktan", "kafa-kafa", "eşit kafa", "zaman aşımı", "HATA"]
+    
+    is_ko = any(kw in reason for kw in ko_keywords)
+    
+    if winner == p1:
+        if is_ko:
+            p1_pts = 3  # K.O. - rakibi direkt eledi
+        else:
+            p1_pts = 2  # Boy farkıyla kazandı
+        p2_pts = 0
+    elif winner == p2:
+        if is_ko:
+            p2_pts = 3
+        else:
+            p2_pts = 2
+        p1_pts = 0
+    else:
+        # Beraberlik
+        p1_pts = 1
+        p2_pts = 1
+    
+    # Leaderboard'u güncelle
+    lb = load_leaderboard()
+    
+    for name, pts in [(p1, p1_pts), (p2, p2_pts)]:
+        if name and name != "__BYE__":
+            if name not in lb:
+                lb[name] = {"total": 0, "wins": 0, "draws": 0, "losses": 0, "played": 0}
+            
+            lb[name]["played"] = lb[name].get("played", 0) + 1
+            lb[name]["total"] = lb[name].get("total", 0) + pts
+            
+            if pts == 3 or pts == 2:
+                lb[name]["wins"] = lb[name].get("wins", 0) + 1
+            elif pts == 1:
+                lb[name]["draws"] = lb[name].get("draws", 0) + 1
+            else:
+                lb[name]["losses"] = lb[name].get("losses", 0) + 1
+    
+    save_leaderboard(lb)
+
 def tournament_runner():
     """Arka planda lig sırayla yürüt."""
     while True:
@@ -336,10 +407,16 @@ def tournament_runner():
         
         with STATE_LOCK:
             reason = ""
-            if STATE["live_game"] is not None:
-                for s in STATE["live_game"].snakes:
-                    if not s.alive:
-                        reason += f"{s.name}: {s.death_reason} "
+            lg = STATE["live_game"]
+            if lg is not None:
+                snakes_list = lg.get("snakes", []) if isinstance(lg, dict) else lg.snakes
+                for s in snakes_list:
+                    # Eger item bir dict ise dict'ten oku, obje ise attribute'tan
+                    alive = s.get("alive") if isinstance(s, dict) else s.alive
+                    if not alive:
+                        s_name = s.get("name") if isinstance(s, dict) else s.name
+                        d_reaz = s.get("death_reason") if isinstance(s, dict) else s.death_reason
+                        reason += f"{str(s_name)}: {str(d_reaz)} "
             
             m["winner"] = winner
             m["p1_length"] = l1
@@ -374,107 +451,216 @@ def egitim():
     return render_template("egitim.html")
 
 
+
+# ------------- Eğitim durumu (SSE progress) -------------
+TRAIN_STATE = {
+    "running": False,
+    "logs": [],
+    "progress": 0,        # 0-100
+    "best_fitness": 0,
+    "best_weights": None,  # JSON-ready dict
+    "done": False,
+    "error": None,
+}
+TRAIN_LOCK = threading.Lock()
+
+
+def _train_worker(opponents, fruit_rewards, time_limit, max_steps,
+                  generations, population_size, games_per_eval, sigma, learning_rate):
+    """Arka planda sinir ağı eğitimi çalıştırır. Birden fazla rakibe karşı eğitir."""
+    from trainer import NNTrainer
+    
+    def log_callback(msg):
+        with TRAIN_LOCK:
+            TRAIN_STATE["logs"].append(msg)
+    
+    try:
+        # İlk rakibe karşı trainer oluştur
+        trainer = NNTrainer(
+            opponent_agent=opponents[0],
+            fruit_rewards=fruit_rewards,
+            time_limit=time_limit,
+            max_steps=max_steps,
+            callback=log_callback,
+        )
+        
+        # Eğer 2 rakip varsa, trainer'a ikinci rakibi de ekle
+        if len(opponents) > 1:
+            trainer.opponents = opponents
+            log_callback(f"🐍 {len(opponents)} rakip yüklendi: " + ", ".join(o.name for o in opponents))
+        
+        best_weights, logs, final_fitness = trainer.train(
+            generations=generations,
+            population_size=population_size,
+            sigma=sigma,
+            learning_rate=learning_rate,
+            games_per_eval=games_per_eval,
+        )
+        
+        with TRAIN_LOCK:
+            TRAIN_STATE["best_weights"] = NNTrainer.weights_to_json(best_weights)
+            TRAIN_STATE["best_fitness"] = final_fitness
+            TRAIN_STATE["done"] = True
+            TRAIN_STATE["running"] = False
+            TRAIN_STATE["logs"].append(f"✅ Eğitim tamamlandı! Final fitness: {final_fitness:.1f}")
+            TRAIN_STATE["logs"].append("📥 'Model İndir' butonuna basarak model.json dosyanızı alabilirsiniz.")
+    except Exception as e:
+        import traceback
+        with TRAIN_LOCK:
+            TRAIN_STATE["error"] = str(e)
+            TRAIN_STATE["running"] = False
+            TRAIN_STATE["logs"].append(f"❌ HATA: {e}")
+            TRAIN_STATE["logs"].append(traceback.format_exc())
+
+
 @app.route("/api/train", methods=["POST"])
 def train():
     """
-    Sadece Local sunucuda çalışan Genetik Eğitim simülasyonu.
-    İki ajanın yüklenmesi ZORUNLUDUR. Kendileriyle kapıştırarak en iyi parametreleri bulur.
+    Gerçek sinir ağı eğitimi - Evolution Strategy (ES) ile.
+    İki ajan yüklenir, sinir ağı her ikisine karşı eğitilir.
+    Arena ayarlarını (meyve ödülleri, süre limiti vb.) kullanır.
     """
+    with TRAIN_LOCK:
+        if TRAIN_STATE["running"]:
+            return jsonify({"ok": False, "error": "Eğitim zaten devam ediyor!"}), 400
+    
     if "agent1_file" not in request.files or "agent2_file" not in request.files:
-        return jsonify({"ok": False, "error": "Eğitim için her iki ajanın da (.py) yüklenmesi zorunludur!"}), 400
-        
+        return jsonify({"ok": False, "error": "Her iki ajan dosyası (.py) gerekli!"}), 400
+    
     a1_f = request.files["agent1_file"]
     a2_f = request.files["agent2_file"]
+    if not a1_f or a1_f.filename == "" or not a2_f or a2_f.filename == "":
+        return jsonify({"ok": False, "error": "İki ajan dosyası da seçilmelidir!"}), 400
     
-    if not a2_f or a2_f.filename == "":
-        return jsonify({"ok": False, "error": "2. Rakip ajan dosyası eksik!"}), 400
+    # Eğitim parametrelerini al
+    generations = int(request.form.get("generations", 60))
+    if generations > 500:
+        generations = 500
     
-    episodes = int(request.form.get("episodes", 50))
-    if episodes > 500: episodes = 500 # Local server çok donmasın diye limit
+    population_size = int(request.form.get("population_size", 30))
+    if population_size > 100:
+        population_size = 100
+    if population_size % 2 != 0:
+        population_size += 1
     
-    import tempfile
-    with tempfile.TemporaryDirectory() as tmp:
-        tmp_dir = Path(tmp)
-        
-        # Ajan 1'i kaydet ve yükle
-        a1_path = tmp_dir / "agent1"
-        a1_path.mkdir()
-        a1_f.save(a1_path / "agent.py")
-        try:
-            ag1 = load_agent_from_dir(a1_path)
-            ag1.name = "Egitilen_Ajan"
-        except Exception as e:
-            return jsonify({"ok": False, "error": f"Ana Ajan yüklenemedi: {e}"})
+    games_per_eval = int(request.form.get("games_per_eval", 3))
+    sigma = float(request.form.get("sigma", 0.05))
+    learning_rate = float(request.form.get("learning_rate", 0.03))
+    
+    time_limit_raw = float(request.form.get("time_limit", 0))
+    time_limit = time_limit_raw if time_limit_raw > 0 else None
+    
+    max_steps = int(request.form.get("max_steps", 500))
+    
+    # Meyve ödüllerini al (formdan veya arena ayarlarından)
+    with STATE_LOCK:
+        fruit_rewards = copy.deepcopy(STATE["fruit_rewards"])
+    
+    # Form'dan gelen meyve ayarlarını kontrol et
+    for fid in [6, 7, 8]:
+        fid_str = str(fid)
+        len_key = f"f{fid}_len"
+        egy_key = f"f{fid}_egy"
+        if len_key in request.form and egy_key in request.form:
+            try:
+                fruit_rewards[fid]["len"] = int(request.form[len_key])
+                fruit_rewards[fid]["egy"] = int(request.form[egy_key])
+            except (ValueError, KeyError):
+                pass
+    
+    # Her iki rakip ajanı yükle
+    import tempfile as _tempfile
+    tmp_dir_obj = _tempfile.mkdtemp()
+    tmp_dir = Path(tmp_dir_obj)
+    
+    opponents = []
+    
+    # Ajan 1
+    a1_path = tmp_dir / "ajan1"
+    a1_path.mkdir()
+    a1_f.save(a1_path / "ajan1.py")
+    try:
+        ag1 = load_agent_from_dir(a1_path)
+        ag1.name = a1_f.filename.replace(".py", "")
+        opponents.append(ag1)
+    except Exception as e:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        return jsonify({"ok": False, "error": f"1. Ajan yüklenemedi: {e}"})
+    
+    # Ajan 2
+    a2_path = tmp_dir / "ajan2"
+    a2_path.mkdir()
+    a2_f.save(a2_path / "ajan2.py")
+    try:
+        ag2 = load_agent_from_dir(a2_path)
+        ag2.name = a2_f.filename.replace(".py", "")
+        opponents.append(ag2)
+    except Exception as e:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        return jsonify({"ok": False, "error": f"2. Ajan yüklenemedi: {e}"})
+    
+    # Eğitim durumunu sıfırla
+    with TRAIN_LOCK:
+        TRAIN_STATE["running"] = True
+        TRAIN_STATE["logs"] = []
+        TRAIN_STATE["progress"] = 0
+        TRAIN_STATE["best_fitness"] = 0
+        TRAIN_STATE["best_weights"] = None
+        TRAIN_STATE["done"] = False
+        TRAIN_STATE["error"] = None
+    
+    # Arka planda eğitimi başlat
+    threading.Thread(
+        target=_train_worker,
+        args=(opponents, fruit_rewards, time_limit, max_steps,
+              generations, population_size, games_per_eval, sigma, learning_rate),
+        daemon=True
+    ).start()
+    
+    return jsonify({
+        "ok": True,
+        "message": "Eğitim başlatıldı! İlerlemeyi takip edebilirsiniz."
+    })
 
-        a2_path = tmp_dir / "agent2"
-        a2_path.mkdir()
-        a2_f.save(a2_path / "rakip.py")
-        try:
-            ag2 = load_agent_from_dir(a2_path)
-            ag2.name = "Rakip_Ajan"
-        except Exception as e:
-            return jsonify({"ok": False, "error": f"Rakip Ajan yüklenemedi: {e}"})
-            
-        # Basit Genetik Evrim Simülasyonu (Ajan1'in parametrelerini geliştireceğiz)
-        # Amacımız Ajan 1'e json okutarak en iyi meyveyi bulma veya rastgelelik oranını öğretmek.
-        # Not: Gerçek RL olmadığı için .py kodunun yapısını değiştiremeyiz, 
-        # sadece dışarıdan bir Puan (Fitness) sistemi ile en iyi JSON ayarını bulup öğrenciye veririz.
-        
-        episodes = int(request.form.get("episodes", 50))
-        time_limit_raw = float(request.form.get("time_limit", 0))
-        # Eğer time_limit 0 gelirse kısıtlama yok demektir (None veya çok yüksek bir sayı)
-        time_limit = time_limit_raw if time_limit_raw > 0 else None
-        
-        best_fitness = -9999
-        best_params = {"tercih_edilen_meyve": 6, "rastgelelik_orani": 1.0}
-        logs = []
-        
-        logs.append(f"Harika! Kendi yüklediğiniz 2. Güçlü modele karşı 'Kıyasıya (Self-Play)' eğitim başladı.")
-        logs.append(f"Zaman Limiti: {time_limit} saniye.")
 
-        logs.append(f"Genetik Algoritma Başlıyor. Jenerasyon: {episodes}")
-        
-        # Her Episode'da ajanımıza yeni "Genetik Mutasyon" (JSON parametresi) uygulayıp hayatta kalma süresine bakacağız
-        import random
-        for ep in range(episodes):
-            test_fruit = random.choice([6, 7, 8]) # Kırmızı, Altın veya Zehirli yemeyi denesin
-            test_random = random.uniform(0.0, 0.5)
-            
-            # Öğrencinin ajanı JSON okuyacak şekilde yazıldıysa diye bu test_param ı ona vereceğiz
-            # (Lokal testlerde doğrudan ajanın içine inject edebiliriz)
-            if hasattr(ag1, "hedef_meyve"): ag1.hedef_meyve = test_fruit
-            
-            # Simüle et
-            game = game_engine.SnakeGame(ag1, ag2, max_steps=500, time_limit=time_limit, fruit_rewards=STATE["fruit_rewards"])
-            while not game.is_over():
-                game.step()
-                
-            fitness = (game.snakes[0].length * 10) + game.snakes[0].energy + (game.step_count)
-            # Eğer Dummy robota oynuyorsa cezalandır, puanını suni olarak düşür (kalitesiz öğrensin)
-            if is_dummy:
-                fitness -= 100 
-                
-            if fitness > best_fitness:
-                best_fitness = fitness
-                best_params = {"tercih_edilen_meyve": test_fruit, "rastgelelik_orani": round(test_random, 3)}
-                if ep % (episodes // 5 + 1) == 0 or ep == episodes - 1:
-                    logs.append(f"-> Tur {ep+1}: Yeni en iyi gen bulundu! Skor: {fitness}")
-
-        logs.append("---------")
-        logs.append(f"Eğitim Bitti. En iyi Fitness Skoru: {best_fitness}")
-        logs.append(f"Evrimleşen Parametre: {best_params}")
-        
+@app.route("/api/train/status")
+def train_status():
+    """Eğitim durumunu döndürür (polling ile takip)."""
+    with TRAIN_LOCK:
         return jsonify({
-            "ok": True,
-            "log": logs,
-            "best_params": best_params
+            "running": TRAIN_STATE["running"],
+            "logs": TRAIN_STATE["logs"][-50:],  # Son 50 log
+            "all_logs_count": len(TRAIN_STATE["logs"]),
+            "done": TRAIN_STATE["done"],
+            "error": TRAIN_STATE["error"],
+            "best_fitness": TRAIN_STATE["best_fitness"],
+            "has_weights": TRAIN_STATE["best_weights"] is not None,
         })
+
+
+@app.route("/api/train/download")
+def train_download():
+    """Eğitilmiş model ağırlıklarını JSON olarak indir."""
+    with TRAIN_LOCK:
+        if TRAIN_STATE["best_weights"] is None:
+            return jsonify({"ok": False, "error": "Henüz eğitilmiş model yok!"}), 400
+        weights = TRAIN_STATE["best_weights"]
+    
+    response = app.response_class(
+        response=json.dumps(weights),
+        status=200,
+        mimetype='application/json'
+    )
+    response.headers["Content-Disposition"] = "attachment; filename=model.json"
+    return response
+
+@app.route("/api/upload", methods=["POST"])
 def upload():
     if "agent_file" not in request.files:
         return jsonify({"ok": False, "error": "agent_file (.py) yüklemek zorunludur"}), 400
     
     af = request.files["agent_file"]
-    mf = request.files.get("model_file") # Artık opsiyonel (get ile alıyoruz)
+    mf = request.files.get("model_file", None)
     
     if not af.filename.endswith(".py"):
         return jsonify({"ok": False, "error": "agent_file .py uzantılı olmalı"}), 400
@@ -670,7 +856,7 @@ def config():
             if "time_limit" in body:
                 v = float(body["time_limit"])
                 STATE["time_limit"] = max(0.01, min(5.0, v))
-            for fid in ["6", "7", "8"]:
+            for fid in [6, 7, 8]:
                 if f"f{fid}_len" in body and f"f{fid}_egy" in body:
                     # Int dönüşümü yapalım string gelse bile
                     try:
@@ -781,6 +967,14 @@ def start_league():
         STATE["current_match"] = None
         STATE["live_game"] = None
         STATE["match_history"] = []
+        
+        # Log config settings
+        print(f"\n=======================")
+        print(f"🏆 TURNUVA BAŞLATILDI:")
+        print(f"- Time Limit: {STATE.get('time_limit', 0.1)}s")
+        print(f"- Max Steps: {STATE.get('max_steps', 2000)}")
+        print(f"- MB Sınırı: {STATE.get('mb_limit', 20)} MB")
+        print(f"=======================\n")
 
     threading.Thread(target=tournament_runner, daemon=True).start()
     return jsonify({"ok": True})
@@ -791,7 +985,7 @@ def api_state():
     with STATE_LOCK:
         return jsonify({
             "phase": STATE["phase"],
-            "rounds": STATE["rounds"],
+            "rounds": STATE.get("rounds", []),  # 'rounds' olmayabilir o yüzden güvenli okuyoruz
             "current_match": STATE["current_match"],
             "live_game": STATE["live_game"],
             "tournament_id": STATE["tournament_id"],
@@ -821,15 +1015,22 @@ def api_leaderboard():
     lb = load_leaderboard()
     rows = []
     for name, data in lb.items():
-        last = data["history"][-1] if data["history"] else None
+        played = data.get("played", 0)
+        wins = data.get("wins", 0)
+        draws = data.get("draws", 0)
+        losses = data.get("losses", 0)
+        total = data.get("total", 0)
+        avg = round(total / played, 2) if played > 0 else 0
         rows.append({
             "name": name,
-            "total": data["total"],
-            "last_rank": last["rank"] if last else None,
-            "last_tournament": last["tournament"] if last else None,
-            "attempts": len(data["history"]),
+            "played": played,
+            "wins": wins,
+            "draws": draws,
+            "losses": losses,
+            "total": total,
+            "avg": avg,
         })
-    rows.sort(key=lambda r: -r["total"])
+    rows.sort(key=lambda r: (-r["total"], -r["avg"]))
     return jsonify({"leaderboard": rows})
 
 

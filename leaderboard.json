@@ -1,0 +1,16 @@
+{
+  "EgitilmisAjan": {
+    "total": 6,
+    "wins": 2,
+    "draws": 0,
+    "losses": 1,
+    "played": 3
+  },
+  "MyAgent": {
+    "total": 3,
+    "wins": 1,
+    "draws": 0,
+    "losses": 2,
+    "played": 3
+  }
+}

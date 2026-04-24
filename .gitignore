@@ -2,3 +2,12 @@
 __pycache__/
 *.py[cod]
 .DS_Store
+Ögelerle Yeni Klasör/*
+uploads/*
+Öğelerle Yeni Klasör/model.json
+.gitignore
+Öğelerle Yeni Klasör/MyAgent.py
+Öğelerle Yeni Klasör/MyAgent2.py
+.gitignore
+Öğelerle Yeni Klasör/model2.json
+
