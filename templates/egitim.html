@@ -190,18 +190,26 @@
     </div>
     
     <form id="trainForm">
-      <!-- İki Ajan Yükleme -->
+      <!-- Eğitilecek Ana Model (Opsiyonel) -->
+      <div class="param-group" style="border-left: 3px solid #10b981; padding-left: 15px;">
+        <h3 style="color: #10b981;">🧠 Kendi Modelini Geliştir (İsteğe Bağlı)</h3>
+        <p class="hint tiny" style="margin:0 0 8px 0;">Daha önce eğittiğiniz bir <b>model.json</b> dosyasına sahipseniz buradan yükleyebilirsiniz. Eğitim sıfırdan başlamaz, kaldığı yerden devam eder!</p>
+        <div class="param-row">
+          <label style="font-weight: bold; color: #10b981; font-size: 0.85rem;">
+            Başlangıç Modeli (.json):
+            <input type="file" id="base_model" name="base_model" accept=".json" style="margin-top:5px;">
+          </label>
+        </div>
+      </div>
+      
+      <!-- Çoklu Rakip Yükleme -->
       <div class="param-group">
         <h3>🐍 Rakip Ajanlar (Antrenman Partnerleri)</h3>
-        <p class="hint tiny" style="margin:0 0 8px 0;">Eğitilecek sinir ağı bu iki rakibe karşı oyun oynayarak öğrenecek. İki farklı ajan yüklerseniz daha güçlü model çıkar.</p>
+        <p class="hint tiny" style="margin:0 0 8px 0;">Eğitilecek sinir ağı yüklediğiniz TÜM rakiplere karşı sırayla oyun oynayarak öğrenecek. İster 1, ister 10, ister 100 ajan seçin.</p>
         <div class="param-row">
-          <label style="font-weight: bold; color: #60a5fa; font-size: 0.85rem;">
-            1. Ajan (.py):
-            <input type="file" id="agent1" name="agent1_file" accept=".py" required style="margin-top:5px;">
-          </label>
-          <label style="font-weight: bold; color: #f87171; font-size: 0.85rem;">
-            2. Ajan (.py):
-            <input type="file" id="agent2" name="agent2_file" accept=".py" required style="margin-top:5px;">
+          <label style="font-weight: bold; color: #f87171; font-size: 0.85rem; width: 100%;">
+            Rakipleri Seçin (Çoklu seçim yapabilirsiniz):
+            <input type="file" id="opponents" name="opponents" accept=".py" multiple required style="margin-top:5px; width: 100%;">
           </label>
         </div>
       </div>
@@ -315,10 +323,9 @@
   document.getElementById("trainForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     
-    const a1 = document.getElementById("agent1").files[0];
-    const a2 = document.getElementById("agent2").files[0];
-    if (!a1 || !a2) {
-      alert("Her iki ajan dosyasını da seçmelisiniz!");
+    const opponentsInput = document.getElementById("opponents");
+    if (!opponentsInput.files || opponentsInput.files.length === 0) {
+      alert("En az bir rakip ajan dosyası (.py) seçmelisiniz!");
       return;
     }
     
@@ -327,8 +334,15 @@
     
     // Form verileri
     let formData = new FormData();
-    formData.append("agent1_file", a1);
-    formData.append("agent2_file", a2);
+    const baseModel = document.getElementById("base_model").files[0];
+    if (baseModel) {
+        formData.append("base_model", baseModel);
+    }
+    
+    // Tüm rakipleri ekle
+    for (let i = 0; i < opponentsInput.files.length; i++) {
+        formData.append("opponents", opponentsInput.files[i]);
+    }
     formData.append("generations", document.getElementById("generations").value);
     formData.append("population_size", document.getElementById("population_size").value);
     formData.append("games_per_eval", document.getElementById("games_per_eval").value);

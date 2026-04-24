@@ -216,25 +216,18 @@ class NNTrainer:
         }
     
     def _weights_to_vector(self, weights):
-        """Ağırlık dict'ini düz vektöre çevir."""
-        return np.concatenate([weights[k].flatten() for k in ["w1", "b1", "w2", "b2", "w_out", "b_out"]])
+        """Ağırlık dict'ini düz vektöre çevir ve shape'leri kaydet."""
+        self.shapes = {k: v.shape for k, v in weights.items()}
+        self.keys = list(weights.keys())
+        return np.concatenate([weights[k].flatten() for k in self.keys])
     
     def _vector_to_weights(self, vec):
         """Düz vektörü ağırlık dict'ine çevir."""
         idx = 0
         weights = {}
         
-        shapes = {
-            "w1": (self.hidden1, self.input_size),
-            "b1": (self.hidden1,),
-            "w2": (self.hidden2, self.hidden1),
-            "b2": (self.hidden2,),
-            "w_out": (self.output_size, self.hidden2),
-            "b_out": (self.output_size,),
-        }
-        
-        for key in ["w1", "b1", "w2", "b2", "w_out", "b_out"]:
-            shape = shapes[key]
+        for key in self.keys:
+            shape = self.shapes[key]
             size = int(np.prod(shape))
             weights[key] = vec[idx:idx+size].reshape(shape)
             idx += size
@@ -263,12 +256,13 @@ class NNTrainer:
         
         return total_fitness / num_games
     
-    def train(self, generations=100, population_size=30, sigma=0.05, 
+    def train(self, base_weights=None, generations=100, population_size=30, sigma=0.05, 
               learning_rate=0.03, games_per_eval=3, stop_event=None):
         """
         Evolution Strategy ile eğitim yap.
         
         Args:
+            base_weights: Devam edilecek mevcut ağırlıklar (dict). Yoksa sıfırdan başlar.
             generations: Toplam nesil sayısı
             population_size: Her nesildeki birey sayısı (çift olmalı)
             sigma: Gürültü şiddeti
@@ -282,7 +276,13 @@ class NNTrainer:
         logs = []
         
         # Başlangıç ağırlıkları
-        weights = self._init_weights()
+        if base_weights is not None:
+            weights = base_weights
+            self.callback("📥 Mevcut model.json yüklendi, eğitim kaldığı yerden devam ediyor...")
+        else:
+            weights = self._init_weights()
+            self.callback("🌱 Yeni model sıfırdan oluşturuldu.")
+            
         theta = self._weights_to_vector(weights)
         n_params = len(theta)
         

@@ -466,7 +466,7 @@ TRAIN_LOCK = threading.Lock()
 
 
 def _train_worker(opponents, fruit_rewards, time_limit, max_steps,
-                  generations, population_size, games_per_eval, sigma, learning_rate):
+                  generations, population_size, games_per_eval, sigma, learning_rate, base_weights=None):
     """Arka planda sinir ağı eğitimi çalıştırır. Birden fazla rakibe karşı eğitir."""
     from trainer import NNTrainer
     
@@ -490,6 +490,7 @@ def _train_worker(opponents, fruit_rewards, time_limit, max_steps,
             log_callback(f"🐍 {len(opponents)} rakip yüklendi: " + ", ".join(o.name for o in opponents))
         
         best_weights, logs, final_fitness = trainer.train(
+            base_weights=base_weights,
             generations=generations,
             population_size=population_size,
             sigma=sigma,
@@ -524,13 +525,22 @@ def train():
         if TRAIN_STATE["running"]:
             return jsonify({"ok": False, "error": "Eğitim zaten devam ediyor!"}), 400
     
-    if "agent1_file" not in request.files or "agent2_file" not in request.files:
-        return jsonify({"ok": False, "error": "Her iki ajan dosyası (.py) gerekli!"}), 400
+    opponents_files = request.files.getlist("opponents")
+    base_model_f = request.files.get("base_model")
     
-    a1_f = request.files["agent1_file"]
-    a2_f = request.files["agent2_file"]
-    if not a1_f or a1_f.filename == "" or not a2_f or a2_f.filename == "":
-        return jsonify({"ok": False, "error": "İki ajan dosyası da seçilmelidir!"}), 400
+    if not opponents_files or len(opponents_files) == 0:
+        return jsonify({"ok": False, "error": "En az bir rakip ajan dosyası seçmelisiniz!"}), 400
+        
+    # Mevcut ağırlıkları oku (Transfer Learning / Continual Learning için)
+    base_weights = None
+    if base_model_f and base_model_f.filename:
+        try:
+            import json
+            import numpy as np
+            raw_weights = json.loads(base_model_f.read().decode('utf-8'))
+            base_weights = {k: np.array(v) for k, v in raw_weights.items()}
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"model.json okunamadı: {e}"}), 400
     
     # Eğitim parametrelerini al
     generations = int(request.form.get("generations", 60))
@@ -568,36 +578,31 @@ def train():
             except (ValueError, KeyError):
                 pass
     
-    # Her iki rakip ajanı yükle
+    # Her rakip ajanı yükle
     import tempfile as _tempfile
     tmp_dir_obj = _tempfile.mkdtemp()
     tmp_dir = Path(tmp_dir_obj)
     
     opponents = []
     
-    # Ajan 1
-    a1_path = tmp_dir / "ajan1"
-    a1_path.mkdir()
-    a1_f.save(a1_path / "ajan1.py")
-    try:
-        ag1 = load_agent_from_dir(a1_path)
-        ag1.name = a1_f.filename.replace(".py", "")
-        opponents.append(ag1)
-    except Exception as e:
+    for i, opp_f in enumerate(opponents_files):
+        if not opp_f or opp_f.filename == "":
+            continue
+            
+        opp_dir = tmp_dir / f"rakip_{i}"
+        opp_dir.mkdir()
+        opp_f.save(opp_dir / opp_f.filename)
+        try:
+            ag = load_agent_from_dir(opp_dir)
+            ag.name = opp_f.filename.replace(".py", "")
+            opponents.append(ag)
+        except Exception as e:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            return jsonify({"ok": False, "error": f"{opp_f.filename} yüklenemedi: {e}"})
+            
+    if not opponents:
         shutil.rmtree(tmp_dir, ignore_errors=True)
-        return jsonify({"ok": False, "error": f"1. Ajan yüklenemedi: {e}"})
-    
-    # Ajan 2
-    a2_path = tmp_dir / "ajan2"
-    a2_path.mkdir()
-    a2_f.save(a2_path / "ajan2.py")
-    try:
-        ag2 = load_agent_from_dir(a2_path)
-        ag2.name = a2_f.filename.replace(".py", "")
-        opponents.append(ag2)
-    except Exception as e:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-        return jsonify({"ok": False, "error": f"2. Ajan yüklenemedi: {e}"})
+        return jsonify({"ok": False, "error": "Geçerli bir rakip yüklenemedi."}), 400
     
     # Eğitim durumunu sıfırla
     with TRAIN_LOCK:
@@ -613,7 +618,7 @@ def train():
     threading.Thread(
         target=_train_worker,
         args=(opponents, fruit_rewards, time_limit, max_steps,
-              generations, population_size, games_per_eval, sigma, learning_rate),
+              generations, population_size, games_per_eval, sigma, learning_rate, base_weights),
         daemon=True
     ).start()
     
