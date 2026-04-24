@@ -470,10 +470,12 @@ def train():
             "best_params": best_params
         })
 def upload():
-    if "agent_file" not in request.files or "model_file" not in request.files:
-        return jsonify({"ok": False, "error": "agent_file ve model_file gerekli"}), 400
+    if "agent_file" not in request.files:
+        return jsonify({"ok": False, "error": "agent_file (.py) yüklemek zorunludur"}), 400
+    
     af = request.files["agent_file"]
-    mf = request.files["model_file"]
+    mf = request.files.get("model_file") # Artık opsiyonel (get ile alıyoruz)
+    
     if not af.filename.endswith(".py"):
         return jsonify({"ok": False, "error": "agent_file .py uzantılı olmalı"}), 400
 
@@ -488,13 +490,16 @@ def upload():
     pdir.mkdir(parents=True)
 
     af.save(str(pdir / f"{safe}.py"))
-    mf.save(str(pdir / mf.filename))
+    
+    # Model dosyası varsa kaydet
+    if mf and mf.filename:
+        mf.save(str(pdir / mf.filename))
 
     try:
         validate_agent_dir(pdir)
     except Exception as e:
         shutil.rmtree(pdir, ignore_errors=True)
-        return jsonify({"ok": False, "error": f"Ajan doğrulanamadı: {e}"}), 400
+        return jsonify({"ok": False, "error": f"Ajan doğrulanamadı. (Not: Model (.json) gerektiren bir ajan yüklüyorsanız model dosyasını da seçmelisiniz): {e}"}), 400
 
     mb = player_params_size_mb(safe)
     with STATE_LOCK:
