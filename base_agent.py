@@ -58,6 +58,10 @@ class BaseAgent(ABC):
         """Sözlük (dict) formatında obs al, 0/1/2/3 döndür."""
         ...
 
+    def handle_reward(self, reward: float, done: bool):
+        """RL eğitimi için ödül sinyali gönderir. İsteğe bağlı override."""
+        pass
+
     def reset(self):
         """Yeni oyun başlarken çağrılır. İsteğe bağlı override."""
         pass

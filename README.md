@@ -28,6 +28,11 @@ class MyAgent(BaseAgent):
         # SENİN YAPMAN GEREKEN: 0, 1, 2 veya 3 dönmek.
         # 0: YUKARI, 1: SAĞ, 2: AŞAĞI, 3: SOL
         return 1 
+
+    def handle_reward(self, reward: float, done: bool):
+        # RL EĞİTİMİ İÇİN (OPSİYONEL): 
+        # Motor sana her adımda ödül (elma:+10, ölüm:-50 vb.) gönderir.
+        pass
 ```
 
 ---

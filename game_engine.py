@@ -262,21 +262,35 @@ class SnakeGame:
             s = self.snakes[i]
             s.body.append(h)
             
+            step_reward = 0.1 # Her hayatta kaldığı adım için ufak bir artı ödül
             ate_type = next((ft for fp, ft, si in eaten_fruits if si == i), None)
             
             if ate_type in (6, 7, 8):
                 rewards = self.fruit_rewards[ate_type]
                 s.target_length = max(2, s.target_length + rewards["len"])
                 s.energy = min(MAX_ENERGY, s.energy + rewards["egy"])
+                
+                # RL Ödülü: Elma tipine göre ödül ekle (+ veya -)
+                if ate_type == 6: step_reward += 10 # Normal Elma
+                elif ate_type == 7: step_reward += 20 # Altın Elma
+                elif ate_type == 8: step_reward -= 5 # Zehir (Enerji verse de boy kısalttığı için ceza)
+
                 sign_len = "+" if rewards['len'] > 0 else ""
                 sign_egy = "+" if rewards['egy'] > 0 else ""
                 msg = f"{s.name} {rewards['name']} yedi ({sign_len}{rewards['len']} Boy, {sign_egy}{rewards['egy']} En)"
                 self.events_log.append((self.step_count, msg))
+            
+            # RL Geri Bildirimi (Başı sağ ise)
+            if s.alive:
+                try: self.agents[i].handle_reward(step_reward, False)
+                except: pass
                 
-            # Manage actual length vs target length
-            while len(s.body) > s.target_length:
-                s.body.popleft()
-                
+        # Ölen yılanlara ceza ödülü ve Done sinyali gönder
+        for i, s in enumerate(self.snakes):
+            if not s.alive:
+                try: self.agents[i].handle_reward(-50, True) # Ölüm cezası
+                except: pass
+
         # Respawn fruits
         for fp, ft, _ in eaten_fruits:
             del self.fruits[fp]
