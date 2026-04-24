@@ -13,38 +13,47 @@
 </head>
 <body>
 <header>
-  <h1>🐍 Snake Arena Eğitim Yönetimi (Training)</h1>
-  <nav style="margin-top: 10px; margin-bottom: 20px; font-size: 1.1rem;">
-    <a href="/" style="color: #94a3b8; text-decoration: none; margin-right: 15px;">🏆 Arena (Lig Testi)</a>
-    <a href="/egitim" style="color: #60a5fa; text-decoration: none; font-weight: bold; border-bottom: 2px solid #60a5fa;">🏋️ Model Eğitimi (Training)</a>
+  <h1>🐍 Snake Arena v2.5</h1>
+  <nav class="main-nav">
+    <a href="/" class="nav-item">🏆 LİG ARENASI (Maç & Test)</a>
+    <a href="/egitim" class="nav-item active">🏋️ EĞİTİM MERKEZİ (Model Training)</a>
   </nav>
-  <p style="color: #cbd5e1; font-size: 0.9rem;">Öğrenciler dilerlerse 2 farklı modeli birbiriyle kapıştırarak, dilerlerse tek bir model yükleyip sistemin sağladığı Zayıf Bot'a karşı eğiterek modellerinin ağırlıklarını (.json/.pth) optimize edebilirler.</p>
 </header>
 
 <main class="training-container">
   <section class="panel train-settings">
-    <h2>1️⃣ Eğitilecek Modeli Yükle</h2>
+    <h2>1️⃣ Modelleri Yükle</h2>
     <form id="trainUploadForm">
-      <label>1. Ajan Kodu (.py) (Eğitilecek olan): <input type="file" id="agent1" name="agent1_file" accept=".py" required></label>
-      <label>2. Ajan Kodu (.py) (Rakip - Opsiyonel): <input type="file" id="agent2" name="agent2_file" accept=".py"></label>
-      <p class="hint tiny" style="margin-bottom:10px;">Not: 2. Ajanı (Rakibi) yüklemezseniz, modeliniz sistemin oluşturacağı 'Antrenman Botu'na karşı eğitilecektir.</p>
+      <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px dashed #475569;">
+        <label style="font-weight: bold; color: #60a5fa;">Ana Ajan (Eğitilecek): 
+          <input type="file" id="agent1" name="agent1_file" accept=".py" required style="margin-top:5px;">
+        </label>
+        <hr style="border: 0; border-top: 1px solid #334155; margin: 15px 0;">
+        <label style="font-weight: bold; color: #f87171;">Rakip Ajan (Zorunlu): 
+          <input type="file" id="agent2" name="agent2_file" accept=".py" required style="margin-top:5px;">
+        </label>
+      </div>
       
-      <button type="submit" class="secondary tiny" style="width:100%">Kodları Buluta Yükle</button>
+      <div id="settingsArea">
+        <label>Eğitim Tur Sayısı:
+          <input type="number" id="trainEpisodes" value="50" min="1" step="1">
+        </label>
+        
+        <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 6px; margin-top: 10px; border: 1px solid #334155;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="enableTimeLimit" style="width: auto;">
+            <span>Zaman Kısıtlaması Uygula</span>
+          </label>
+          <div id="timeLimitContainer" style="margin-top: 8px; display: none;">
+            <label style="font-size: 0.8rem;">Maks. Hamle Süresi (sn):
+              <input type="number" id="timeLimit" value="0.1" min="0.01" step="0.01">
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="primary" style="width:100%; height: 45px; font-weight: bold; margin-top: 15px;">🚀 Eğitimi Başlat</button>
     </form>
-    
-    <div id="settingsPanel" style="margin-top:20px; opacity:0.5; pointer-events:none;">
-      <h2>2️⃣ Eğitim Ayarları (RL)</h2>
-        <label>Eğitim Algoritması (Sadece Lokal Eğitim):
-        <select id="trainAlgo">
-          <option value="genetic">Yerel Genetik Evrim (Hızlı - Kural Tabanlı)</option>
-          <option value="dummy_rl" disabled>Derin Öğrenme (RL - Terminalden Başlatın)</option>
-        </select>
-      </label>
-      <label>Tur (Episode / Jenerasyon) Sayısı:
-        <input type="number" id="trainEpisodes" value="50" min="1" step="1">
-      </label>
-      <button id="startTrainBtn" type="button" class="primary" style="margin-top:10px; width:100%;">🚀 Lokal Eğitimi Başlat</button>
-    </div>
   </section>
 
   <section class="train-console">
@@ -62,35 +71,67 @@
   </section>
 </main>
 <script>
-  let trainedParams = null; // Backend'den gelecek
+  let trainedParams = null;
 
   document.getElementById("trainUploadForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    document.getElementById("logArea").innerHTML += "<br>[System] Python dosyaları başarıyla seçildi. Eğitime başlayabilirsiniz.";
-    const setPanel = document.getElementById("settingsPanel");
-    setPanel.style.opacity = 1;
-    setPanel.style.pointerEvents = "auto";
-  });
-
-  document.getElementById("startTrainBtn").addEventListener("click", async () => {
+      e.preventDefault();
+      
       const log = document.getElementById("logArea");
-      const btn = document.getElementById("startTrainBtn");
+      const btn = e.submitter;
       
       const a1 = document.getElementById("agent1").files[0];
       const a2 = document.getElementById("agent2").files[0];
       
-      if (!a1) return alert("1. Ajanı seçmek zorunludur!");
+      if (!a1 || !a2) {
+          alert("Eğitim için her iki ajanı da seçmek zorunludur!");
+          return;
+      }
       
       let formData = new FormData();
       formData.append("agent1_file", a1);
-      if (a2) formData.append("agent2_file", a2);
-      
+      formData.append("agent2_file", a2);
       formData.append("episodes", document.getElementById("trainEpisodes").value);
+      
+      const timeEnabled = document.getElementById("enableTimeLimit").checked;
+      if (timeEnabled) {
+          formData.append("time_limit", document.getElementById("timeLimit").value);
+      } else {
+          formData.append("time_limit", "0"); // 0 = Limitsiz
+      }
       
       btn.disabled = true;
       btn.style.opacity = 0.5;
       document.getElementById("trainStatus").innerText = "(Eğitim Sürüyor... Lütfen Bekleyin)";
-      log.innerHTML += "<br><br>[Eğitim] Lokal oyun motorunda genetik eğitim başlatılıyor...<br>Bu işlem tur sayısına göre birkaç saniye sürebilir.<br>";
+      log.innerHTML += "<br><br>[Eğitim] Modeller yüklendi. Lokal oyun motorunda genetik eğitim başlatılıyor...<br>";
+
+      try {
+          const resp = await fetch("/api/train", {
+              method: "POST",
+              body: formData
+          });
+          const result = await resp.json();
+          
+          btn.disabled = false;
+          btn.style.opacity = 1;
+          document.getElementById("trainStatus").innerText = "(Bitti)";
+
+          if (result.success) {
+              log.innerHTML += `<br><b style='color:#fbbf24'>[BAŞARILI]</b> Eğitim tamamlandı! <br>Fitness: ${result.fitness.toFixed(2)}<br>Parametreler optimize edildi.`;
+              trainedParams = result.best_params;
+              document.getElementById("downloadBtn").disabled = false;
+              document.getElementById("downloadBtn").style.opacity = 1;
+              document.getElementById("downloadBtn").style.pointerEvents = "auto";
+          } else {
+              log.innerHTML += `<br><b style='color:#f87171'>[HATA]</b> ${result.error}`;
+          }
+      } catch (err) {
+          log.innerHTML += `<br><b style='color:#f87171'>[SİSTEM HATASI]</b> Sunucuya ulaşılamadı.`;
+          btn.disabled = false;
+          btn.style.opacity = 1;
+      }
+  });
+
+  document.getElementById("downloadBtn").addEventListener("click", () => {
       
       try {
           const res = await fetch("/api/train", {
@@ -135,6 +176,11 @@
       document.body.appendChild(node);
       node.click();
       node.remove();
+  });
+
+  // Zaman kısıtlaması checkbox kontrolü
+  document.getElementById("enableTimeLimit").addEventListener("change", (e) => {
+      document.getElementById("timeLimitContainer").style.display = e.target.checked ? "block" : "none";
   });
 </script>
 </body>

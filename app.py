@@ -377,15 +377,17 @@ def egitim():
 @app.route("/api/train", methods=["POST"])
 def train():
     """
-    Sadece Local sunucuda çalışacak olan Çok Hızlı 'Genetik' Eğitim simülasyonu.
-    Yüklenen .py ajanını alır, eğer 2. ajan yoksa salak Dummy_Bot ile, 
-    eğer 2. ajan varsa kendi kendileriyle N tur kapıştırarak en ideal parametre matrisini evrimleştirir.
+    Sadece Local sunucuda çalışan Genetik Eğitim simülasyonu.
+    İki ajanın yüklenmesi ZORUNLUDUR. Kendileriyle kapıştırarak en iyi parametreleri bulur.
     """
-    if "agent1_file" not in request.files:
-        return jsonify({"ok": False, "error": "agent1_file gerekli"}), 400
+    if "agent1_file" not in request.files or "agent2_file" not in request.files:
+        return jsonify({"ok": False, "error": "Eğitim için her iki ajanın da (.py) yüklenmesi zorunludur!"}), 400
         
     a1_f = request.files["agent1_file"]
-    a2_f = request.files.get("agent2_file")
+    a2_f = request.files["agent2_file"]
+    
+    if not a2_f or a2_f.filename == "":
+        return jsonify({"ok": False, "error": "2. Rakip ajan dosyası eksik!"}), 400
     
     episodes = int(request.form.get("episodes", 50))
     if episodes > 500: episodes = 500 # Local server çok donmasın diye limit
@@ -402,30 +404,25 @@ def train():
             ag1 = load_agent_from_dir(a1_path)
             ag1.name = "Egitilen_Ajan"
         except Exception as e:
-            return jsonify({"ok": False, "error": f"Ajan 1 yüklenemedi: {e}"})
+            return jsonify({"ok": False, "error": f"Ana Ajan yüklenemedi: {e}"})
+
+        a2_path = tmp_dir / "agent2"
+        a2_path.mkdir()
+        a2_f.save(a2_path / "rakip.py")
+        try:
+            ag2 = load_agent_from_dir(a2_path)
+            ag2.name = "Rakip_Ajan"
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"Rakip Ajan yüklenemedi: {e}"})
             
-        # Rakip Ajan Seçimi
-        ag2 = None
-        is_dummy = True
-        if a2_f and a2_f.filename:
-            a2_path = tmp_dir / "agent2"
-            a2_path.mkdir()
-            a2_f.save(a2_path / "rakip.py")
-            try:
-                ag2 = load_agent_from_dir(a2_path)
-                ag2.name = "Gercek_Rakip"
-                is_dummy = False
-            except Exception:
-                pass
-                
-        if not ag2:
-            # HOCANIN İSTEDİĞİ: Üşenenlere ceza. Kötü, salak ve zayıf gelişecek eğitim ortamı robotu.
-            class DummyBot(BaseAgent):
-                def act(self, obs: dict) -> int:
-                    import random
-                    return random.randint(0, 3) # Tamamen rastgele, çok kolay ölür, eğiteni kalitesiz bırakır
-            ag2 = DummyBot(name="Dummy_Zayif_Bot")
-            
+        # Basit Genetik Evrim Simülasyonu (Ajan1'in parametrelerini geliştireceğiz)
+        # Amacımız Ajan 1'e json okutarak en iyi meyveyi bulma veya rastgelelik oranını öğretmek.
+        # Not: Gerçek RL olmadığı için .py kodunun yapısını değiştiremeyiz, 
+        # sadece dışarıdan bir Puan (Fitness) sistemi ile en iyi JSON ayarını bulup öğrenciye veririz.
+        
+        episodes = int(request.form.get("episodes", 50))
+        time_limit = float(request.form.get("time_limit", 0.1))
+        
         # Basit Genetik Evrim Simülasyonu (Ajan1'in parametrelerini geliştireceğiz)
         # Amacımız Ajan 1'e json okutarak en iyi meyveyi bulma veya rastgelelik oranını öğretmek.
         # Not: Gerçek RL olmadığı için .py kodunun yapısını değiştiremeyiz, 
@@ -435,11 +432,8 @@ def train():
         best_params = {"tercih_edilen_meyve": 6, "rastgelelik_orani": 1.0}
         logs = []
         
-        if is_dummy:
-            logs.append("Uyarı: 2. Ajan yüklemediniz! Modeliniz SALAK DUMMY BOTA karşı eğitiliyor.")
-            logs.append("Cezanız: Modeliniz gerçek taktikler görmediği için performansı (zeka seviyesi) düşük evrilecek.")
-        else:
-            logs.append("Harika! Kendi yüklediğiniz 2. Güçlü modele karşı 'Kıyasıya (Self-Play)' eğitim başladı.")
+        logs.append(f"Harika! Kendi yüklediğiniz 2. Güçlü modele karşı 'Kıyasıya (Self-Play)' eğitim başladı.")
+        logs.append(f"Zaman Limiti: {time_limit} saniye.")
 
         logs.append(f"Genetik Algoritma Başlıyor. Jenerasyon: {episodes}")
         
@@ -454,7 +448,7 @@ def train():
             if hasattr(ag1, "hedef_meyve"): ag1.hedef_meyve = test_fruit
             
             # Simüle et
-            game = game_engine.SnakeGame(ag1, ag2, max_steps=500, time_limit=0.5, fruit_rewards=STATE["fruit_rewards"])
+            game = game_engine.SnakeGame(ag1, ag2, max_steps=500, time_limit=time_limit, fruit_rewards=STATE["fruit_rewards"])
             while not game.is_over():
                 game.step()
                 
