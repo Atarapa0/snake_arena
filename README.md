@@ -239,6 +239,14 @@ class OgrenciYilan(BaseAgent):
 6. Konsolda ilerlemeyi izle
 7. **Eğitim bitince `model.json` İndir**
 
+### 7.1 Gelişmiş Teknik: Eğitilmiş Yapay Zekayı Rakip Yapma
+Yapay zekan belli bir seviyeye geldikten sonra, onu daha da geliştirmek için **eski modellerine karşı** eğitebilirsin.
+
+**Nasıl Yapılır?**
+1. **Rakipler** kısmında dosya seçerken, hem ajanın `.py` dosyasını (Örn: `arena_otcul.py`) hem de ona ait `.json` dosyasını (Örn: `arena_otcul.json`) **aynı anda** seçerek yükle.
+2. Sistem bu iki dosyayı eşleştirerek, eski yapay zekanı eğitimde bir rakip olarak kullanacaktır.
+3. Bu sayede yapay zekan, sadece kurallı (if/else) rakiplere karşı değil, kendisi gibi zeki rakiplere karşı da tecrübe kazanır.
+
 ### Eğitim Parametreleri:
 | Parametre | Varsayılan | Açıklama |
 |-----------|-----------|----------|

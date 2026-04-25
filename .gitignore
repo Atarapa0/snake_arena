@@ -2,24 +2,15 @@
 __pycache__/
 *.py[cod]
 .DS_Store
-Ögelerle Yeni Klasör/*
-uploads/*
-Öğelerle Yeni Klasör/model.json
-.gitignore
-Öğelerle Yeni Klasör/MyAgent.py
-Öğelerle Yeni Klasör/MyAgent2.py
-.gitignore
-Öğelerle Yeni Klasör/model2.json
 
-# Test ve örnek dosyaları öğrencilere gitmesin
-test_beyin1_saldirgan.py
-test_beyin2_otcul.py
-arena_saldirgan.py
-arena_otcul.py
+# Proje Dosyaları
+uploads/
+leaderboard.json
+
+# Ajan Klasörleri (Öğrencilere gitmeyecek olanlar)
 Egitim_Test_Ajanlari/
-arena_saldirgan.json
-.gitignore
-arena_otcul.json
-arena_v3_stabil.py
-arena_v3_stabil.json
-arena_v4_agresif.py
+Arena_Ajanlari/
+
+# Diğer
+Ögelerle Yeni Klasör/
+Öğelerle Yeni Klasör/

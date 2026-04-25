@@ -609,27 +609,38 @@ def train():
             except (ValueError, KeyError):
                 pass
     
-    # Her rakip ajanı yükle
+    # Her rakip ajanı yükle (Aynı isimli .py ve .json dosyalarını aynı klasöre koyar)
     import tempfile as _tempfile
     tmp_dir_obj = _tempfile.mkdtemp()
     tmp_dir = Path(tmp_dir_obj)
     
-    opponents = []
+    # Dosyaları ismine göre grupla
+    groups = {}
+    for opp_f in opponents_files:
+        if not opp_f or opp_f.filename == "": continue
+        stem = Path(opp_f.filename).stem
+        if stem not in groups: groups[stem] = []
+        groups[stem].append(opp_f)
     
-    for i, opp_f in enumerate(opponents_files):
-        if not opp_f or opp_f.filename == "":
-            continue
-            
-        opp_dir = tmp_dir / f"rakip_{i}"
-        opp_dir.mkdir()
-        opp_f.save(opp_dir / opp_f.filename)
-        try:
-            ag = load_agent_from_dir(opp_dir)
-            ag.name = opp_f.filename.replace(".py", "")
-            opponents.append(ag)
-        except Exception as e:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
-            return jsonify({"ok": False, "error": f"{opp_f.filename} yüklenemedi: {e}"})
+    opponents = []
+    for stem, files in groups.items():
+        opp_dir = tmp_dir / f"rakip_{stem}"
+        opp_dir.mkdir(exist_ok=True)
+        
+        has_py = False
+        for f in files:
+            f.save(opp_dir / f.filename)
+            if f.filename.endswith(".py"):
+                has_py = True
+        
+        if has_py:
+            try:
+                ag = load_agent_from_dir(opp_dir)
+                ag.name = stem
+                opponents.append(ag)
+            except Exception as e:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+                return jsonify({"ok": False, "error": f"{stem} yüklenemedi: {e}"})
             
     if not opponents:
         shutil.rmtree(tmp_dir, ignore_errors=True)
