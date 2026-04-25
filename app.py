@@ -21,7 +21,7 @@ from pathlib import Path
 import logging
 
 import numpy as np
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, make_response
 
 import game_engine
 from base_agent import BaseAgent
@@ -459,6 +459,7 @@ TRAIN_STATE = {
     "progress": 0,        # 0-100
     "best_fitness": 0,
     "best_weights": None,  # JSON-ready dict
+    "model_filename": "model.json", # İndirilecek dosyanın adı
     "done": False,
     "error": None,
 }
@@ -543,6 +544,10 @@ def train():
     brain_tmp = _tempfile.mkdtemp()
     brain_path = Path(brain_tmp) / brain_file.filename
     brain_file.save(str(brain_path))
+    
+    # Model indirme ismini ayarla (test_beyin.py -> test_beyin.json)
+    model_download_name = brain_file.filename.replace(".py", "") + ".json"
+    
     try:
         spec = importlib.util.spec_from_file_location("student_brain", str(brain_path))
         brain_module = importlib.util.module_from_spec(spec)
@@ -570,12 +575,12 @@ def train():
     
     # Eğitim parametrelerini al
     generations = int(request.form.get("generations", 60))
-    if generations > 500:
-        generations = 500
+    if generations > 5000:
+        generations = 5000
     
     population_size = int(request.form.get("population_size", 30))
-    if population_size > 100:
-        population_size = 100
+    if population_size > 1000:
+        population_size = 1000
     if population_size % 2 != 0:
         population_size += 1
     
@@ -637,6 +642,7 @@ def train():
         TRAIN_STATE["progress"] = 0
         TRAIN_STATE["best_fitness"] = 0
         TRAIN_STATE["best_weights"] = None
+        TRAIN_STATE["model_filename"] = model_download_name
         TRAIN_STATE["done"] = False
         TRAIN_STATE["error"] = None
     
@@ -669,20 +675,17 @@ def train_status():
         })
 
 
-@app.route("/api/train/download")
-def train_download():
-    """Eğitilmiş model ağırlıklarını JSON olarak indir."""
+@app.route("/api/download_model")
+def api_download_model():
     with TRAIN_LOCK:
-        if TRAIN_STATE["best_weights"] is None:
-            return jsonify({"ok": False, "error": "Henüz eğitilmiş model yok!"}), 400
-        weights = TRAIN_STATE["best_weights"]
-    
-    response = app.response_class(
-        response=json.dumps(weights),
-        status=200,
-        mimetype='application/json'
-    )
-    response.headers["Content-Disposition"] = "attachment; filename=model.json"
+        if not TRAIN_STATE["done"] or not TRAIN_STATE["best_weights"]:
+            return "Model hazır değil", 400
+        data = TRAIN_STATE["best_weights"]
+        filename = TRAIN_STATE.get("model_filename", "model.json")
+        
+    response = make_response(data)
+    response.headers["Content-Disposition"] = f"attachment; filename={filename}"
+    response.mimetype = "application/json"
     return response
 
 @app.route("/api/upload", methods=["POST"])

@@ -328,6 +328,7 @@ Lider tablosunda: O (Oynanan), G (Galibiyet), B (Beraberlik), M (Mağlubiyet), P
 3. **Torus Kullan:** Harita kenarları bağlıdır. Sağdan çıkıp soldan girebilirsin. Kaçış yolu olarak kullan.
 4. **Çok rakiple eğit:** Sadece 1 rakibe karşı eğitirsen o rakibe özel strateji öğrenir. 3-5 farklı rakiple eğitirsen daha genel bir model çıkar.
 5. **Model.json'u devam ettir:** Aynı modeli farklı rakiplere karşı sırayla eğiterek giderek güçlendir.
+6. **Ödül İstismarına (Reward Hacking) Dikkat Et:** Yapay zeka senin koyduğun ödül/ceza mantığındaki açıkları arar! Örneğin, sadece rakibi öldürmeye +5000 puan verirsen, yapay zeka hiçbir şey yapmadan rakibinin yanlışlıkla ölmesini beklemeyi "en karlı" strateji sanacaktır. Buna "Yapay Zeka Tembelliği" denir. Çözüm: **Ölüm cezası ekle**. `if not stats["my_alive"]: score -= 5000.0` ekleyerek intihar etmesini veya hiçbir şey yapmadan ölmesini kesin bir dille yasakla!
 
 ---
 

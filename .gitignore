@@ -14,4 +14,12 @@ uploads/*
 # Test ve örnek dosyaları öğrencilere gitmesin
 test_beyin1_saldirgan.py
 test_beyin2_otcul.py
+arena_saldirgan.py
+arena_otcul.py
 Egitim_Test_Ajanlari/
+arena_saldirgan.json
+.gitignore
+arena_otcul.json
+arena_v3_stabil.py
+arena_v3_stabil.json
+arena_v4_agresif.py
