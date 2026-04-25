@@ -465,9 +465,9 @@ TRAIN_STATE = {
 TRAIN_LOCK = threading.Lock()
 
 
-def _train_worker(opponents, fruit_rewards, time_limit, max_steps,
+def _train_worker(brain_module, opponents, fruit_rewards, time_limit, max_steps,
                   generations, population_size, games_per_eval, sigma, learning_rate, base_weights=None):
-    """Arka planda sinir ağı eğitimi çalıştırır. Birden fazla rakibe karşı eğitir."""
+    """Arka planda sinir ağı eğitimi çalıştırır. Öğrencinin beyin modülünü kullanır."""
     from trainer import NNTrainer
     
     def log_callback(msg):
@@ -475,8 +475,9 @@ def _train_worker(opponents, fruit_rewards, time_limit, max_steps,
             TRAIN_STATE["logs"].append(msg)
     
     try:
-        # İlk rakibe karşı trainer oluştur
+        # Öğrencinin beyin modülüyle trainer oluştur
         trainer = NNTrainer(
+            brain=brain_module,
             opponent_agent=opponents[0],
             fruit_rewards=fruit_rewards,
             time_limit=time_limit,
@@ -484,10 +485,10 @@ def _train_worker(opponents, fruit_rewards, time_limit, max_steps,
             callback=log_callback,
         )
         
-        # Eğer 2 rakip varsa, trainer'a ikinci rakibi de ekle
+        # Tüm rakipleri ekle
         if len(opponents) > 1:
             trainer.opponents = opponents
-            log_callback(f"🐍 {len(opponents)} rakip yüklendi: " + ", ".join(o.name for o in opponents))
+        log_callback(f"🐍 {len(opponents)} rakip yüklendi: " + ", ".join(o.name for o in opponents))
         
         best_weights, logs, final_fitness = trainer.train(
             base_weights=base_weights,
@@ -527,9 +528,34 @@ def train():
     
     opponents_files = request.files.getlist("opponents")
     base_model_f = request.files.get("base_model")
+    brain_file = request.files.get("brain_file")
     
     if not opponents_files or len(opponents_files) == 0:
         return jsonify({"ok": False, "error": "En az bir rakip ajan dosyası seçmelisiniz!"}), 400
+        
+    if not brain_file or not brain_file.filename:
+        return jsonify({"ok": False, "error": "Beyin dosyası (.py) yüklemek ZORUNLUDUR!"}), 400
+    
+    # Öğrencinin beyin modülünü yükle
+    brain_module = None
+    import tempfile as _tempfile
+    import importlib.util
+    brain_tmp = _tempfile.mkdtemp()
+    brain_path = Path(brain_tmp) / brain_file.filename
+    brain_file.save(str(brain_path))
+    try:
+        spec = importlib.util.spec_from_file_location("student_brain", str(brain_path))
+        brain_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(brain_module)
+        # Zorunlu alanları kontrol et
+        if not hasattr(brain_module, 'architecture'):
+            return jsonify({"ok": False, "error": "Beyin dosyasında 'architecture' listesi bulunamadı!"}), 400
+        if not hasattr(brain_module, 'fitness'):
+            return jsonify({"ok": False, "error": "Beyin dosyasında 'fitness(stats)' fonksiyonu bulunamadı!"}), 400
+        if not hasattr(brain_module, 'forward'):
+            return jsonify({"ok": False, "error": "Beyin dosyasında 'forward(weights, grid, stats)' fonksiyonu bulunamadı!"}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Beyin dosyası yüklenemedi: {e}"}), 400
         
     # Mevcut ağırlıkları oku (Transfer Learning / Continual Learning için)
     base_weights = None
@@ -617,7 +643,7 @@ def train():
     # Arka planda eğitimi başlat
     threading.Thread(
         target=_train_worker,
-        args=(opponents, fruit_rewards, time_limit, max_steps,
+        args=(brain_module, opponents, fruit_rewards, time_limit, max_steps,
               generations, population_size, games_per_eval, sigma, learning_rate, base_weights),
         daemon=True
     ).start()

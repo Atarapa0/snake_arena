@@ -11,5 +11,7 @@ uploads/*
 .gitignore
 Öğelerle Yeni Klasör/model2.json
 
-Egitim_Test_Ajanlari/ajan1_avci.py
-Egitim_Test_Ajanlari/ajan2_guvenli.py
+# Test ve örnek dosyaları öğrencilere gitmesin
+test_beyin1_saldirgan.py
+test_beyin2_otcul.py
+Egitim_Test_Ajanlari/

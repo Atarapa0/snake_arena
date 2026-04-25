@@ -1,12 +1,18 @@
 """
 GERÇEK SİNİR AĞI EĞİTİCİSİ - Evolution Strategy (ES)
 =====================================================
-Bu modül, 904→64→64→4 sinir ağı mimarisini gerçekten eğitir.
-Oyun motorunu kullanarak binlerce oyun simüle eder ve ağırlıkları evrimleştirir.
+Öğrencinin yazdığı beyin dosyasını (mimari + fitness + forward) kullanarak
+sinir ağını Evolution Strategy ile eğitir.
+
+Öğrenci kendi beyin dosyasını (.py) yazar:
+  - architecture: [904, 128, 64, 4] gibi katman boyutları
+  - activation: "tanh" veya "relu"
+  - fitness(stats): oyun sonunda skor döndüren fonksiyon
+  - forward(weights, grid, stats): ağırlıklarla yön hesaplayan fonksiyon
 
 Kullanım:
     from trainer import NNTrainer
-    trainer = NNTrainer(agent_a_cls, agent_b, fruit_rewards, time_limit, ...)
+    trainer = NNTrainer(brain_module=brain, ...)
     best_weights, logs = trainer.train(generations=100, population_size=30)
 """
 
@@ -19,98 +25,118 @@ from collections import deque
 import game_engine
 
 
-# ==================== HIZLI SİMÜLASYON ====================
-# Eğitim sırasında zaman kaybetmemek için time.sleep olmadan oyun oynatırız
+# ==================== VARSAYILAN BEYİN (brain modülü yüklenmezse) ====================
 
-def fast_simulate(weights, opponent_agent, seed, max_steps=500, time_limit=None, fruit_rewards=None):
+class DefaultBrain:
+    """Öğrenci bir beyin dosyası yüklemezse bu kullanılır."""
+    architecture = [904, 64, 64, 4]
+    activation = "tanh"
+    
+    @staticmethod
+    def fitness(stats):
+        score = 0.0
+        score += stats["survived_steps"] * 0.1
+        score += stats["my_length"] * 15.0
+        score += stats["my_energy"] * 0.05
+        
+        if stats["won"]:
+            score += 200.0
+            if not stats["opp_alive"]:
+                score += 100.0
+        elif stats["lost"]:
+            score -= 100.0
+        else:
+            if stats["my_alive"] and stats["opp_alive"]:
+                score += (stats["my_length"] - stats["opp_length"]) * 10.0
+        
+        if not stats["my_alive"]:
+            score -= 150.0
+            if stats["step_count"] < 50:
+                score -= 200.0
+            elif stats["step_count"] < 200:
+                score -= 100.0
+        
+        return score
+    
+    @staticmethod
+    def forward(weights, grid, stats):
+        grid_flat = np.array(grid, dtype=np.float32).flatten()
+        stats_array = np.array(stats, dtype=np.float32)
+        x = np.concatenate((grid_flat, stats_array))
+        
+        arch = DefaultBrain.architecture
+        num_layers = len(arch) - 1
+        for i in range(num_layers):
+            w = weights[f"w{i}"]
+            b = weights[f"b{i}"]
+            x = np.dot(w, x) + b
+            if i < num_layers - 1:
+                x = np.tanh(x)
+        
+        return int(np.argmax(x))
+
+
+# ==================== HIZLI SİMÜLASYON ====================
+
+def fast_simulate(weights, brain, opponent_agent, seed, max_steps=500, time_limit=None, fruit_rewards=None):
     """
-    Verilen ağırlıklarla bir sinir ağı ajanı oluşturur ve rakibe karşı oynatır.
-    Dönüş: fitness skoru
+    Verilen ağırlıklarla öğrencinin beyin modülünü kullanarak oyun oynatır.
+    Dönüş: fitness skoru (öğrencinin fitness fonksiyonuyla hesaplanır)
     """
-    nn_agent = NNAgentWrapper(weights, name="Egitilen")
+    nn_agent = NNAgentWrapper(weights, brain, name="Egitilen")
     
     game = game_engine.SnakeGame(
         nn_agent, opponent_agent,
         seed=seed,
         max_steps=max_steps,
-        time_limit=time_limit if time_limit else 99.0,  # Eğitimde süre limiti opsiyonel
+        time_limit=time_limit if time_limit else 99.0,
         fruit_rewards=fruit_rewards
     )
     
     while not game.is_over():
         game.step()
     
-    # === FITNESS HESAPLA ===
+    # === FITNESS İSTATİSTİKLERİNİ TOPLA ===
     me = game.snakes[0]
     opp = game.snakes[1]
-    
-    fitness = 0.0
-    
-    # 1) Hayatta kalma süresi (daha uzun yaşamak iyi)
-    fitness += game.step_count * 0.1
-    
-    # 2) Boy (uzun yılan iyi)
-    fitness += me.length * 15.0
-    
-    # 3) Enerji (daha fazla enerji iyi - açlıktan ölme riski az)
-    fitness += me.energy * 0.05
-    
-    # 4) Kazanma/Kaybetme büyük ödül
     w_idx = game.winner()
-    if w_idx == 0:
-        # Biz kazandık
-        fitness += 200.0
-        if not opp.alive:
-            # Rakibi öldürdük (K.O.) - ekstra büyük ödül
-            fitness += 100.0
-    elif w_idx == 1:
-        # Kaybettik
-        fitness -= 100.0
-    else:
-        # Berabere - boyumuza göre hafif ödül/ceza
-        if me.alive and opp.alive:
-            fitness += (me.length - opp.length) * 10.0
     
-    # 5) Ölüm cezası
-    if not me.alive:
-        fitness -= 150.0
-        # Erken ölüm daha kötü
-        if game.step_count < 50:
-            fitness -= 200.0
-        elif game.step_count < 200:
-            fitness -= 100.0
+    stats = {
+        "survived_steps": game.step_count,
+        "my_length": me.length,
+        "my_energy": me.energy,
+        "opp_length": opp.length,
+        "opp_alive": opp.alive,
+        "my_alive": me.alive,
+        "won": w_idx == 0,
+        "lost": w_idx == 1,
+        "draw": w_idx is None or w_idx == -1,
+        "max_steps": max_steps,
+        "step_count": game.step_count,
+    }
     
-    return fitness
+    # Öğrencinin fitness fonksiyonunu çağır
+    try:
+        return brain.fitness(stats)
+    except Exception as e:
+        # Öğrencinin fitness fonksiyonunda hata varsa düşük skor ver
+        return -999.0
 
 
 class NNAgentWrapper:
-    """Eğitim sırasında kullanılan hafif sinir ağı ajanı. BaseAgent'a gerek yok."""
+    """Eğitim sırasında kullanılan hafif sinir ağı ajanı. Öğrencinin forward fonksiyonunu kullanır."""
     
-    def __init__(self, weights, name="NN"):
+    def __init__(self, weights, brain, name="NN"):
         self.name = name
-        self.w1 = weights["w1"]
-        self.b1 = weights["b1"]
-        self.w2 = weights["w2"]
-        self.b2 = weights["b2"]
-        self.w_out = weights["w_out"]
-        self.b_out = weights["b_out"]
+        self.weights = weights
+        self.brain = brain
     
     def act(self, obs):
-        grid = obs["grid"]
-        stats = obs["stats"]
-        
-        grid_flat = np.array(grid, dtype=np.float32).flatten()
-        stats_array = np.array(stats, dtype=np.float32)
-        x = np.concatenate((grid_flat, stats_array))
-        
-        # Forward pass
-        x = np.dot(self.w1, x) + self.b1
-        x = np.tanh(x)
-        x = np.dot(self.w2, x) + self.b2
-        x = np.tanh(x)
-        logits = np.dot(self.w_out, x) + self.b_out
-        
-        return int(np.argmax(logits))
+        try:
+            return self.brain.forward(self.weights, obs["grid"], obs["stats"])
+        except Exception:
+            # Öğrencinin forward fonksiyonunda hata varsa rastgele git
+            return np.random.randint(0, 4)
     
     def handle_reward(self, reward, done):
         pass
@@ -129,20 +155,17 @@ class SimpleOpponent:
         grid = obs["grid"]
         stats = obs["stats"]
         
-        # Kendi kafamızı bul (bu ajan 2. oyuncu olarak yüklenecek, yani kafası 1)
         kafa = np.argwhere(grid == 1)
         if len(kafa) == 0:
             return np.random.randint(0, 4)
         
         kafa_r, kafa_c = kafa[0]
         
-        # Meyveleri bul (6, 7)
         meyveler = np.argwhere((grid == 6) | (grid == 7))
         
         if len(meyveler) == 0:
             return np.random.randint(0, 4)
         
-        # En yakın meyveyi bul
         mesafeler = np.abs(meyveler[:, 0] - kafa_r) + np.abs(meyveler[:, 1] - kafa_c)
         en_yakin = meyveler[np.argmin(mesafeler)]
         
@@ -167,6 +190,11 @@ class NNTrainer:
     """
     Evolution Strategy (ES) tabanlı sinir ağı eğiticisi.
     
+    Öğrencinin yazdığı beyin modülünü kullanarak:
+    - Mimariyi (architecture) beyin dosyasından okur
+    - Fitness fonksiyonunu beyin dosyasından çağırır
+    - Forward fonksiyonunu beyin dosyasından çağırır
+    
     OpenAI ES yaklaşımı:
     - Bir "ana" ağırlık seti tutulur
     - Her nesilde, bu ağırlıklara küçük gürültüler eklenerek popülasyon oluşturulur
@@ -174,46 +202,43 @@ class NNTrainer:
     - En iyilerin gürültü yönünde ağırlıklar güncellenir
     """
     
-    def __init__(self, opponent_agent=None, fruit_rewards=None, time_limit=None, 
+    def __init__(self, brain=None, opponent_agent=None, fruit_rewards=None, time_limit=None, 
                  max_steps=500, callback=None):
         """
         Args:
+            brain: Öğrencinin beyin modülü (architecture, fitness, forward içermeli)
             opponent_agent: Rakip ajan (act, handle_reward, reset metotlarına sahip)
             fruit_rewards: Meyve ödülleri dict'i (arena ayarlarından)
             time_limit: Karar süresi limiti
             max_steps: Oyun başına max adım
             callback: Her nesil sonunda çağrılacak fonksiyon (log mesajı için)
         """
+        self.brain = brain or DefaultBrain()
         self.opponent = opponent_agent or SimpleOpponent()
-        self.opponents = [self.opponent]  # Birden fazla rakip destekler
+        self.opponents = [self.opponent]
         self.fruit_rewards = fruit_rewards
         self.time_limit = time_limit
         self.max_steps = max_steps
         self.callback = callback or (lambda msg: None)
         
-        # Ağ boyutları
-        self.input_size = 904   # 30*30 + 4
-        self.hidden1 = 64
-        self.hidden2 = 64
-        self.output_size = 4
+        # Mimariyi beyin modülünden oku
+        self.architecture = getattr(self.brain, 'architecture', [904, 64, 64, 4])
+        self.activation = getattr(self.brain, 'activation', 'tanh')
     
     def _init_weights(self):
-        """Xavier initialization ile rastgele ağırlıklar oluştur."""
+        """Öğrencinin mimarisine göre Xavier initialization ile ağırlıklar oluştur."""
         rng = np.random.default_rng()
+        weights = {}
         
-        # Xavier initialization (tanh için uygun)
-        w1_scale = np.sqrt(2.0 / (self.input_size + self.hidden1))
-        w2_scale = np.sqrt(2.0 / (self.hidden1 + self.hidden2))
-        wout_scale = np.sqrt(2.0 / (self.hidden2 + self.output_size))
+        for i in range(len(self.architecture) - 1):
+            fan_in = self.architecture[i]
+            fan_out = self.architecture[i + 1]
+            scale = np.sqrt(2.0 / (fan_in + fan_out))
+            
+            weights[f"w{i}"] = rng.normal(0, scale, (fan_out, fan_in))
+            weights[f"b{i}"] = np.zeros(fan_out)
         
-        return {
-            "w1": rng.normal(0, w1_scale, (self.hidden1, self.input_size)),
-            "b1": np.zeros(self.hidden1),
-            "w2": rng.normal(0, w2_scale, (self.hidden2, self.hidden1)),
-            "b2": np.zeros(self.hidden2),
-            "w_out": rng.normal(0, wout_scale, (self.output_size, self.hidden2)),
-            "b_out": np.zeros(self.output_size),
-        }
+        return weights
     
     def _weights_to_vector(self, weights):
         """Ağırlık dict'ini düz vektöre çevir ve shape'leri kaydet."""
@@ -240,11 +265,10 @@ class NNTrainer:
         
         for g in range(num_games):
             seed = base_seed + g
-            # Rakipleri dönüşümlü kullan
             opp = self.opponents[g % len(self.opponents)]
             try:
                 fitness = fast_simulate(
-                    weights, opp,
+                    weights, self.brain, opp,
                     seed=seed,
                     max_steps=self.max_steps,
                     time_limit=self.time_limit,
@@ -252,7 +276,7 @@ class NNTrainer:
                 )
                 total_fitness += fitness
             except Exception as e:
-                total_fitness -= 500  # Hata varsa çok kötü skor
+                total_fitness -= 500
         
         return total_fitness / num_games
     
@@ -271,7 +295,7 @@ class NNTrainer:
             stop_event: Dışarıdan durdurma sinyali (threading.Event)
             
         Returns:
-            (best_weights_dict, logs_list)
+            (best_weights_dict, logs_list, final_fitness)
         """
         logs = []
         
@@ -286,13 +310,17 @@ class NNTrainer:
         theta = self._weights_to_vector(weights)
         n_params = len(theta)
         
-        self.callback(f"🧠 Sinir Ağı: {self.input_size} → {self.hidden1} → {self.hidden2} → {self.output_size}")
+        # Mimari bilgisini logla
+        arch_str = " → ".join(str(x) for x in self.architecture)
+        self.callback(f"🧠 Sinir Ağı Mimarisi: {arch_str}")
+        self.callback(f"🎯 Aktivasyon: {self.activation}")
         self.callback(f"📊 Toplam parametre: {n_params:,}")
         self.callback(f"🏋 Eğitim: {generations} nesil × {population_size} birey × {games_per_eval} oyun")
         self.callback(f"⚙ Meyve ödülleri: {self.fruit_rewards}")
         self.callback(f"⏱ Süre limiti: {self.time_limit}")
         self.callback("─" * 40)
         
+        logs.append(f"Mimari: {arch_str}")
         logs.append(f"Parametre sayısı: {n_params}")
         
         if population_size % 2 != 0:
@@ -364,7 +392,7 @@ class NNTrainer:
             
             # Adaptif ayarlar
             if stale_count > 10:
-                sigma = min(sigma * 1.05, 0.2)  # Gürültüyü artır
+                sigma = min(sigma * 1.05, 0.2)
                 stale_count = 0
                 self.callback(f"   📈 Sigma artırıldı: {sigma:.4f}")
             

@@ -180,36 +180,49 @@
 
 <main class="training-container">
   <section class="panel train-settings">
-    <h2>🧠 Gerçek Sinir Ağı Eğitimi</h2>
+    <h2>🧠 Sinir Ağı Eğitim Merkezi</h2>
     
     <div class="info-box">
-      <b>Nasıl Çalışır?</b> İki ajan dosyası (.py) yükleyin. Sistem <b>Evolution Strategy (ES)</b> 
-      algoritması ile <b>904→64→64→4</b> sinir ağını <b>sıfırdan</b> eğitir. Yüklediğiniz her iki 
-      ajana karşı binlerce oyun simüle eder ve ağırlıkları evrimleştirir. Sonuçta indireceğiniz 
+      <b>Nasıl Çalışır?</b> Kendi sinir ağı modelinizi (beyin dosyası) ve rakiplerinizi yükleyin.
+      Sistem <b>Evolution Strategy (ES)</b> algoritması ile sizin tanımladığınız mimarideki sinir ağını
+      rakiplerinize karşı binlerce oyun simüle ederek eğitir. Sonuçta indireceğiniz
       <b>model.json</b> dosyasını arenada kullanabilirsiniz.
     </div>
     
     <form id="trainForm">
-      <!-- Eğitilecek Ana Model (Opsiyonel) -->
-      <div class="param-group" style="border-left: 3px solid #10b981; padding-left: 15px;">
-        <h3 style="color: #10b981;">🧠 Kendi Modelini Geliştir (İsteğe Bağlı)</h3>
-        <p class="hint tiny" style="margin:0 0 8px 0;">Daha önce eğittiğiniz bir <b>model.json</b> dosyasına sahipseniz buradan yükleyebilirsiniz. Eğitim sıfırdan başlamaz, kaldığı yerden devam eder!</p>
+      <!-- 1. BÖLÜM: Beyin Dosyası (ZORUNLU) -->
+      <div class="param-group" style="border-left: 3px solid #60a5fa; padding-left: 15px;">
+        <h3 style="color: #60a5fa;">🧠 Sinir Ağı Modeli (Beyin Dosyası) — ZORUNLU</h3>
+        <p class="hint tiny" style="margin:0 0 8px 0;">Kendi sinir ağı mimarinizi, ödül/ceza fonksiyonunuzu ve ileri besleme fonksiyonunuzu tanımladığınız <b>.py</b> dosyasını yükleyin.</p>
+        <p class="hint tiny" style="margin:0 0 8px 0; color: #94a3b8;">Dosyanızda olması gerekenler: <code>architecture</code> listesi, <code>fitness(stats)</code> fonksiyonu, <code>forward(weights, grid, stats)</code> fonksiyonu</p>
         <div class="param-row">
-          <label style="font-weight: bold; color: #10b981; font-size: 0.85rem;">
-            Başlangıç Modeli (.json):
-            <input type="file" id="base_model" name="base_model" accept=".json" style="margin-top:5px;">
+          <label style="font-weight: bold; color: #60a5fa; font-size: 0.85rem; width: 100%;">
+            Beyin Dosyası (.py):
+            <input type="file" id="brain_file" name="brain_file" accept=".py" required style="margin-top:5px; width: 100%;">
           </label>
         </div>
       </div>
-      
-      <!-- Çoklu Rakip Yükleme -->
-      <div class="param-group">
-        <h3>🐍 Rakip Ajanlar (Antrenman Partnerleri)</h3>
-        <p class="hint tiny" style="margin:0 0 8px 0;">Eğitilecek sinir ağı yüklediğiniz TÜM rakiplere karşı sırayla oyun oynayarak öğrenecek. İster 1, ister 10, ister 100 ajan seçin.</p>
+
+      <!-- 2. BÖLÜM: Rakipler -->
+      <div class="param-group" style="border-left: 3px solid #f87171; padding-left: 15px;">
+        <h3 style="color: #f87171;">🐍 Rakip Ajanlar (Sizin Yazdığınız)</h3>
+        <p class="hint tiny" style="margin:0 0 8px 0;">Sinir ağınızın karşısında eğitileceği rakip ajanları yükleyin. Bunları da siz yazarsınız! İster 1, ister 10 rakip seçin.</p>
         <div class="param-row">
           <label style="font-weight: bold; color: #f87171; font-size: 0.85rem; width: 100%;">
             Rakipleri Seçin (Çoklu seçim yapabilirsiniz):
             <input type="file" id="opponents" name="opponents" accept=".py" multiple required style="margin-top:5px; width: 100%;">
+          </label>
+        </div>
+      </div>
+
+      <!-- 3. BÖLÜM: Mevcut Model (Devam Ettirme) -->
+      <div class="param-group" style="border-left: 3px solid #10b981; padding-left: 15px;">
+        <h3 style="color: #10b981;">📥 Eğitimi Devam Ettir (İsteğe Bağlı)</h3>
+        <p class="hint tiny" style="margin:0 0 8px 0;">Daha önce eğittiğiniz bir <b>model.json</b> varsa yükleyin. Eğitim sıfırdan başlamaz, kaldığı yerden devam eder!</p>
+        <div class="param-row">
+          <label style="font-weight: bold; color: #10b981; font-size: 0.85rem; width: 100%;">
+            Mevcut Model (.json):
+            <input type="file" id="base_model" name="base_model" accept=".json" style="margin-top:5px; width: 100%;">
           </label>
         </div>
       </div>
@@ -323,6 +336,12 @@
   document.getElementById("trainForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     
+    const brainInput = document.getElementById("brain_file");
+    if (!brainInput.files || brainInput.files.length === 0) {
+      alert("Beyin dosyası (.py) yüklemeniz zorunludur! Sinir ağı mimarinizi, ödül/ceza fonksiyonunuzu ve forward fonksiyonunuzu tanımlayan dosyayı seçin.");
+      return;
+    }
+    
     const opponentsInput = document.getElementById("opponents");
     if (!opponentsInput.files || opponentsInput.files.length === 0) {
       alert("En az bir rakip ajan dosyası (.py) seçmelisiniz!");
@@ -334,6 +353,14 @@
     
     // Form verileri
     let formData = new FormData();
+    
+    // Beyin dosyası (opsiyonel)
+    const brainFile = document.getElementById("brain_file").files[0];
+    if (brainFile) {
+        formData.append("brain_file", brainFile);
+    }
+    
+    // Mevcut model (opsiyonel)
     const baseModel = document.getElementById("base_model").files[0];
     if (baseModel) {
         formData.append("base_model", baseModel);
